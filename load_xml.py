@@ -26,7 +26,7 @@ sns.set_style("darkgrid")
 sns.set_context("paper") #Possible are paper, notebook, talk and poster
 
 d = {'lines.linewidth': 2, 'axes.titlesize': 18, 'axes.labelsize': 18, 'xtick.labelsize': 12, 'ytick.labelsize': 12,\
-     'legend.fontsize': 15, 'font.family': 'serif', 'figure.figsize': (9,6)}
+     'legend.fontsize': 15, 'font.family': 'serif', 'figure.figsize': (9,9)}
 d_colors = {'axes.prop_cycle': cycler(color = ['teal', 'navy', 'coral', 'plum', 'purple', 'olivedrab',\
          'black', 'red', 'cyan', 'yellow', 'khaki','lightblue'])}
 rcParams.update(d)
@@ -34,7 +34,7 @@ rcParams.update(d_colors)
 np.set_printoptions(precision = 5, suppress=1e-10)
 
 path_mock = 'FakeTracks1.xml' 
-path_celss = '20.09_tracks.xml' 
+path_cells = '20.09.xml' 
 
 ### FUNCTIONS -----------------------------------------------------------------
 
@@ -269,7 +269,7 @@ def main():
     #tree = ET.parse('FakeTracks1.xml')
     #spots = tree.getroot()
 
-    spots = trackmate_peak_import(path_mock, include_features_list=include_features, get_tracks=False)
+    spots = trackmate_peak_import(path_cells, include_features_list=include_features, get_tracks=False)
     
 
     # spots = trackmate_peak_import(path_mock)
@@ -278,7 +278,7 @@ def main():
     print(spots.describe())
 
     time_range = np.arange(spots['T'].min(), spots['T'].max() + 1)
-    xlim, ylim = (0,120), (0,120)
+    xlim, ylim = (spots['X'].min(), spots['X'].max()), (spots['Y'].min(), spots['Y'].max())
     plotter = lambda ax, spots, t, plot_masks: plot_spots(ax, spots, t, xlim, ylim, plot_masks=plot_masks)
 
     anim = animate(plotter, spots, t_range=time_range[:25], inter=300, plot_masks=True,)
