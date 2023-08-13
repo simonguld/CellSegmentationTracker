@@ -18,7 +18,7 @@ from cycler import cycler
 
 #sys.path.append('C:\\Users\\Simon\\miniconda3\\envs\\cellpose')
 
-#from cellpose import plot, utils
+from cellpose import plot, utils
 
 ## Change directory to current one
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -28,7 +28,7 @@ sys.path.append(os.getcwd())
 ## 
 im_path1 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\20.09.22"
 im_path2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22"
-im_path3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23 stretch data for simon (2)"
+im_path3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data"
 
 ### FUNCTIONS ----------------------------------------------------------------------------------
 
@@ -170,7 +170,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 def main():
     ## OBJECTIVE: Load mock data images, show them, and convert them to arrays
-    show_ims1, show_ims2, show_ims3 = False, False, True
+    show_ims1, show_ims2, show_ims3 = False, False, False
 
     im_list1 = get_imlist(im_path1, format = '.tif')
     im_list2 = get_imlist(im_path2, format = '.tif')
@@ -214,10 +214,11 @@ def main():
             im3_list[i].save(im_path3  + f"_{target_width}x{target_height}\\{file_name}.tif")
             im3_list[i].show()
 
-    if 0:
+    if 1:
         ## Try loading cellpose output
-        output_path = "C:\\Users\\Simon\\Documents\\Uni\\Speciale\\Mock data\\valeriias mdck data for simon\\valeriias mdck data for simon\\20.09.22\\im0_seg.npy"
 
+        output_path = "C:\\Users\\Simon\\Documents\\Uni\\Speciale\\Mock data\\valeriias mdck data for simon\\valeriias mdck data for simon\\20.09.22\\im0_seg.npy"
+        output_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\20.09.22_698x648\\im2_seg.npy"
         dat = np.load(output_path, allow_pickle=True).item()
 
         #fig = plt.subplots()
@@ -238,7 +239,7 @@ def main():
             # plot image with outlines overlaid in red
             outlines = utils.outlines_list(dat['masks'])
             plt.imshow(dat['img'])
-            for o in outlines[0:10]:
+            for o in outlines[0:100]:
                 Nskip = 4
                 range = np.arange(0, o.shape[0], Nskip)
                 numbers += len(range) * 2

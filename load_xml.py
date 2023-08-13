@@ -134,14 +134,14 @@ def trackmate_peak_import(trackmate_xml_path, include_features_list = None, get_
 
     trajs = trajs.loc[:, object_labels.keys()]
     trajs.columns = [object_labels[k] for k in object_labels.keys()]
-    trajs['label'] = np.arange(trajs.shape[0])
+    trajs['TRACK_ID'] = np.arange(trajs.shape[0])
 
     # Get tracks
     if get_tracks:
         filtered_track_ids = [int(track.get('TRACK_ID')) for track in root.find('Model').find('FilteredTracks').findall('TrackID')]
 
         label_id = 0
-        trajs['label'] = np.nan
+        trajs['TRACK_ID'] = np.nan
 
         tracks = root.find('Model').find('AllTracks')
         for track in tracks.findall('Track'):
@@ -153,12 +153,12 @@ def trackmate_peak_import(trackmate_xml_path, include_features_list = None, get_
                 spot_ids = np.array(spot_ids).astype('float')[:, :2]
                 spot_ids = set(spot_ids.flatten())
 
-                trajs.loc[trajs["Spot ID"].isin(spot_ids), "label"] = label_id
+                trajs.loc[trajs["Spot ID"].isin(spot_ids), "TRACK_ID"] = label_id
                 label_id += 1
 
         # Label remaining columns
-        single_track = trajs.loc[trajs["label"].isnull()]
-        trajs.loc[trajs["label"].isnull(), "label"] = label_id + np.arange(0, len(single_track))
+        single_track = trajs.loc[trajs["TRACK_ID"].isnull()]
+        trajs.loc[trajs["TRACK_ID"].isnull(), "TRACK_ID"] = label_id + np.arange(0, len(single_track))
 
     return trajs
 
@@ -269,13 +269,19 @@ def main():
     #tree = ET.parse('FakeTracks1.xml')
     #spots = tree.getroot()
 
-    spots = trackmate_peak_import(path_cells, include_features_list=include_features, get_tracks=False)
+    spots = trackmate_peak_import(path_mock, include_features_list=include_features, get_tracks=True)
     
 
-    # spots = trackmate_peak_import(path_mock)
-    print(spots.head())
+    # spots = trackmate_p
+    # eak_import(path_mock)
+    print(spots.head(20))
     print(spots.info())
     print(spots.describe())
+
+
+  
+    first_frame_idx = spots.index[spots['Frame'] == 0]
+    print(first_frame_idx.shape)
 
     time_range = np.arange(spots['T'].min(), spots['T'].max() + 1)
     xlim, ylim = (spots['X'].min(), spots['X'].max()), (spots['Y'].min(), spots['Y'].max())

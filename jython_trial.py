@@ -46,9 +46,9 @@ settings = Settings(imp)
 settings.detectorFactory = DogDetectorFactory()
 settings.detectorSettings = {
     'DO_SUBPIXEL_LOCALIZATION' : True,
-    'RADIUS' : 2.5,
+    'RADIUS' : 5.,
     'TARGET_CHANNEL' : 1,
-    'THRESHOLD' : 2.,
+    'THRESHOLD' : 4.,
     'DO_MEDIAN_FILTERING' : False,
 }
 
@@ -113,8 +113,7 @@ ok = trackmate.process()
 if not ok:
     sys.exit(str(trackmate.getErrorMessage()))
 
-raise SystemExit("you made it")
-print("you made it")
+
 
 #----------------
 # Display results
@@ -158,3 +157,4 @@ for id in model.getTrackModel().trackIDs(True):
         snr=spot.getFeature('SNR_CH1')
         mean=spot.getFeature('MEAN_INTENSITY_CH1')
         model.getLogger().log('\tspot ID = ' + str(sid) + ': x='+str(x)+', y='+str(y)+', t='+str(t)+', q='+str(q) + ', snr='+str(snr) + ', mean = ' + str(mean))
+     
