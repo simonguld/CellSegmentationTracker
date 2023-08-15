@@ -21,33 +21,43 @@ from ij import IJ
 
 
 from datetime import datetime as dt
-import sys 
+import sys, os
+import json 
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 # ------------------------------------------------------
-# 	EDIT FILE PATHS BELOW.
+# 	LOAD SETTINGS FROM FILE.
 # ------------------------------------------------------
 
+current_path = os.getcwd()
+file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jython_dict.json')
+with open(file_path, 'r') as file:
+        param_dict = json.load(file)
+
+# Load paths from settings file.
+image_path = param_dict['IMG_PATH']
+cellpose_python_filepath = param_dict['CELLPOSE_PYTHON_FILEPATH']
+model_directory = param_dict['CUSTOM_MODEL_PATH']
+output_path = param_dict['OUTPUT_PATH']
+
+cellpose_dict = param_dict['CELLPOSE_DICT']
+trackmate_dict = param_dict['TRACKMATE_DICT']
+
+
+
+
 # Shall we display the results each time?
-show_output = False
+show_output = param_dict['SHOW_SEGMENTATION']
 
-# Channel to process? 
-channel_to_process = 1
 
-# Image files to analyse.
-file_paths = []
-image_file = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
-input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
-model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
-cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
 # ------------------------------------------------------
 # 	ACTUAL CODE.
 # ------------------------------------------------------
 
 # Open image.
-imp  = IJ.openImage( image_file)
+imp  = IJ.openImage( image_path)
 dims = imp.getDimensions()
 
 # Make sure dimensions are correct
@@ -74,29 +84,40 @@ setup = settings.toStringImageInfo()
 # Configure Cellpose default detector.
 
 settings.detectorFactory = CellposeDetectorFactory()
+settings.detectorSettings = cellpose_dict
 
-settings.detectorSettings = {
-        'TARGET_CHANNEL' : 0,
-        'OPTIONAL_CHANNEL_2':0,
-        'CELLPOSE_PYTHON_FILEPATH': cellpose_python_filepath,
-        'CELLPOSE_MODEL': PretrainedModel.CYTO,
-     'CELLPOSE_MODEL_FILEPATH': model_directory,#only use if custom
-        'CELL_DIAMETER': 30.0,
-        'USE_GPU': True,
-        'SIMPLIFY_CONTOURS': True,
-}	
+if cellpose_dict['CELLPOSE_MODEL'] =='CYTO':
+     cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.CYTO
+elif cellpose_dict['CELLPOSE_MODEL'] =='CYTO2':
+        cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.CYTO2
+elif cellpose_dict['CELLPOSE_MODEL'] == 'NUCLEI':
+        cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.NUCLEI
+else:
+        cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.CUSTOM
 
+
+if 0:
+    settings.detectorSettings = {
+            'TARGET_CHANNEL' : 0,
+            'OPTIONAL_CHANNEL_2':0,
+            'CELLPOSE_PYTHON_FILEPATH': cellpose_python_filepath,
+            'CELLPOSE_MODEL': PretrainedModel.CYTO,
+        'CELLPOSE_MODEL_FILEPATH': model_directory,#only use if custom
+            'CELL_DIAMETER': 30.0,
+            'USE_GPU': True,
+            'SIMPLIFY_CONTOURS': True,
+    }	
 
 
 # Configure tracker
 settings.trackerFactory = SparseLAPTrackerFactory()
 settings.trackerSettings = settings.trackerFactory.getDefaultSettings()
-settings.trackerSettings['LINKING_MAX_DISTANCE'] = 15.0
-settings.trackerSettings['GAP_CLOSING_MAX_DISTANCE'] = 15.0
-settings.trackerSettings['MAX_FRAME_GAP'] = 2
-settings.trackerSettings['ALLOW_TRACK_SPLITTING'] = True
-settings.trackerSettings['ALLOW_TRACK_MERGING'] = True
 
+settings.trackerSettings['LINKING_MAX_DISTANCE'] = trackmate_dict['LINKING_MAX_DISTANCE']
+settings.trackerSettings['GAP_CLOSING_MAX_DISTANCE'] = trackmate_dict['GAP_CLOSING_MAX_DISTANCE']
+settings.trackerSettings['MAX_FRAME_GAP'] = trackmate_dict['MAX_FRAME_GAP']
+settings.trackerSettings['ALLOW_TRACK_SPLITTING'] = trackmate_dict['ALLOW_TRACK_SPLITTING']
+settings.trackerSettings['ALLOW_TRACK_MERGING'] = trackmate_dict['ALLOW_TRACK_MERGING']
 
 # Analyzers 
 settings.addAllAnalyzers()
@@ -149,11 +170,15 @@ if show_output:
     displayer.render()
     displayer.refresh()
 
-    # capture overlay - RGB file
-    image = trackmate.getSettings().imp
-    capture = CaptureOverlayAction.capture(image, -1, imp.getNFrames(), logger)
-    capture.setTitle("TracksOverlay")
-    capture.show()
+    if 0:
+        # capture overlay - RGB file
+        image = trackmate.getSettings().imp
+        capture = CaptureOverlayAction.capture(image, -1, imp.getNFrames(), logger)
+        capture.setTitle("TracksOverlay")
+        capture.show()
+
+print("Tracking and segmentation completed.")
+
 
 # ------------------------------------------------------
 
