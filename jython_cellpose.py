@@ -61,9 +61,7 @@ imp  = IJ.openImage( image_path)
 dims = imp.getDimensions()
 
 # Make sure dimensions are correct
-print("DIM", dims)
 imp.setDimensions( dims[ 2 ], dims[ 4 ], dims[ 3 ] )
-print("DIM", dims)
 cal = imp.getCalibration()
 
 # Logger -> content will be saved in the XML file.
@@ -94,20 +92,6 @@ elif cellpose_dict['CELLPOSE_MODEL'] == 'NUCLEI':
         cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.NUCLEI
 else:
         cellpose_dict['CELLPOSE_MODEL'] = PretrainedModel.CUSTOM
-
-
-if 0:
-    settings.detectorSettings = {
-            'TARGET_CHANNEL' : 0,
-            'OPTIONAL_CHANNEL_2':0,
-            'CELLPOSE_PYTHON_FILEPATH': cellpose_python_filepath,
-            'CELLPOSE_MODEL': PretrainedModel.CYTO,
-        'CELLPOSE_MODEL_FILEPATH': model_directory,#only use if custom
-            'CELL_DIAMETER': 30.0,
-            'USE_GPU': True,
-            'SIMPLIFY_CONTOURS': True,
-    }	
-
 
 # Configure tracker
 settings.trackerFactory = SparseLAPTrackerFactory()
@@ -170,15 +154,7 @@ if show_output:
     displayer.render()
     displayer.refresh()
 
-    if 0:
-        # capture overlay - RGB file
-        image = trackmate.getSettings().imp
-        capture = CaptureOverlayAction.capture(image, -1, imp.getNFrames(), logger)
-        capture.setTitle("TracksOverlay")
-        capture.show()
-
 print("Tracking and segmentation completed.")
-
 
 # ------------------------------------------------------
 

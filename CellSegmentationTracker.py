@@ -2,6 +2,7 @@
 import os, sys, glob
 import tifftools, json
 import platform
+import time
 from subprocess import Popen, PIPE
 
 import numpy as np
@@ -244,7 +245,7 @@ def print_all_possible_spot_features():
 ##TODO:
 
 ##ESSENTIAL (DO FIRST)
-# make os.system work or find another way to run jython script
+
 # extend model path to be relative you know
 # fig out a good way to name trackmate xmls
 # extend args so as to be able to choose model(place it in models folder, such that ..\models\model kan be used to access model from this directory)
@@ -253,6 +254,7 @@ def print_all_possible_spot_features():
 
 ## NONESSENTIAL (IF TIME)
 # resize img
+# make naming of xml and csv files more flexible
 
 
 class CellSegmentationTracker:
@@ -295,7 +297,7 @@ class CellSegmentationTracker:
 
         self.csv = None
         
-        # If no xml file is provided, cell segmentation, tracking and generation of an xml file is performed
+        # If no xml file is provided (or present in image folder), cell segmentation, tracking and generation of an xml file is performed
         if self.xml_path is None:
             # If no image folder is provided, raise error
             if self.img_folder is None:
@@ -312,81 +314,71 @@ class CellSegmentationTracker:
                     os.remove(self.img_path)
                 merge_tiff(self.img_folder, img_out_name = os.path.join(self.img_folder, "merged.tif"))
                 print("Merged tif files into one file: ", self.img_path)
-            
 
-            # Generate dictionary for jython script, if not already provided
-            self.jython_dict.update({"IMG_PATH": self.img_path, "FIJI_FOLDER_PATH": self.fiji_folder_path, \
-                                "CELLPOSE_PYTHON_FILEPATH": self.cellpose_python_filepath, "CUSTOM_MODEL_PATH": self.custom_model_path,
-                                 "OUTPUT_PATH": self.output_folder, "SHOW_SEGMENTATION": self.show_segmentation})
-            
-            # Specify Cellpose and TrackMate parameters not set by user
-            if self.cellpose_dict == {}:
-                self.cellpose_dict = self.cellpose_default_values
+            # Ensure that xml file has not already been created
+            if os.path.isfile(self.img_path.strip(".tif") + ".xml"):
+                pass
             else:
-                for key in self.cellpose_default_values.keys():
-                    if key not in self.cellpose_dict.keys():
-                        self.cellpose_dict[key] = self.cellpose_default_values[key]
-            if self.trackmate_dict == {}:
-                self.trackmate_dict = self.trackmate_default_values
-            else:
-                for key in self.trackmate_default_values.keys():
-                    if key not in self.trackmate_dict.keys():
-                        self.trackmate_dict[key] = self.trackmate_default_values[key]
+                # Generate dictionary for jython script, if not already provided
+                self.jython_dict.update({"IMG_PATH": self.img_path, "FIJI_FOLDER_PATH": self.fiji_folder_path, \
+                                    "CELLPOSE_PYTHON_FILEPATH": self.cellpose_python_filepath, "CUSTOM_MODEL_PATH": self.custom_model_path,
+                                    "OUTPUT_PATH": self.output_folder, "SHOW_SEGMENTATION": self.show_segmentation})
+                
+                # Specify Cellpose and TrackMate parameters not set by user
+                if self.cellpose_dict == {}:
+                    self.cellpose_dict = self.cellpose_default_values
+                else:
+                    for key in self.cellpose_default_values.keys():
+                        if key not in self.cellpose_dict.keys():
+                            self.cellpose_dict[key] = self.cellpose_default_values[key]
+                if self.trackmate_dict == {}:
+                    self.trackmate_dict = self.trackmate_default_values
+                else:
+                    for key in self.trackmate_default_values.keys():
+                        if key not in self.trackmate_dict.keys():
+                            self.trackmate_dict[key] = self.trackmate_default_values[key]
+
+                self.jython_dict.update({'CELLPOSE_DICT': self.cellpose_dict})
+                self.jython_dict.update({'TRACKMATE_DICT': self.trackmate_dict})
 
 
-            if 0:
-                if 'TARGET_CHANNEL' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['TARGET_CHANNEL'] = 0
-                if 'OPTIONAL_CHANNEL_2' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['OPTIONAL_CHANNEL_2'] = 0
-                if 'CELLPOSE_MODEL' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['CELLPOSE_MODEL'] = use_model
-                # When cell diameter is set to 0, Cellpose will estimate the cell radius
-                if 'CELL_DIAMETER' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['CELL_DIAMETER'] = 0 
-                if 'USE_GPU' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['USE_GPU'] = False
-                if 'SIMPLIFY_CONTOURS' not in self.cellpose_dict.keys():
-                    self.cellpose_dict['SIMPLIFY_CONTOURS'] = True
-
-                if 'LINKING_MAX_DISTANCE' not in self.trackmate_dict.keys():
-                    self.trackmate_dict['LINKING_MAX_DISTANCE'] = 15.0
-                if 'GAP_CLOSING_MAX_DISTANCE' not in self.trackmate_dict.keys():
-                    self.trackmate_dict['GAP_CLOSING_MAX_DISTANCE'] = 15.0
-                if 'MAX_FRAME_GAP' not in self.trackmate_dict.keys():
-                    self.trackmate_dict['MAX_FRAME_GAP'] = 2
-                if 'ALLOW_TRACK_SPLITTING' not in self.trackmate_dict.keys():
-                    self.trackmate_dict['ALLOW_TRACK_SPLITTING'] = True
-                if 'ALLOW_TRACK_MERGING' not in self.trackmate_dict.keys():
-                    self.trackmate_dict['ALLOW_TRACK_MERGING'] = True
-
-            self.jython_dict.update({'CELLPOSE_DICT': self.cellpose_dict})
-            self.jython_dict.update({'TRACKMATE_DICT': self.trackmate_dict})
+                # Save dictionary to json file
+                with open(os.path.join(self.current_path,"jython_dict.json"), 'w') as fp:
+                    json.dump(self.jython_dict, fp)
 
 
-            # Save dictionary to json file
-            with open(os.path.join(self.current_path,"jython_dict.json"), 'w') as fp:
-                json.dump(self.jython_dict, fp)
+                # Run jython script
+                os.chdir(self.fiji_folder_path)
+                executable = list(os.path.split(self.imagej_filepath))[-1]
+                jython_path = os.path.join(self.current_path, "jython_cellpose.py")
 
-
-            # Run jython script
-            os.chdir(self.fiji_folder_path)
-            executable = list(os.path.split(self.imagej_filepath))[-1]
-            jython_path = os.path.join(self.current_path, "jython_cellpose.py")
-
-            if self.show_segmentation: 
-                command = executable + ' --ij2 --run "' + jython_path + '"'
-            else:
-                command = executable + ' --ij2 --headless --run "' + jython_path + '"'
-
-            os.system(command)
-
+                if self.show_segmentation: 
+                    command = executable + ' --ij2 --console --run "' + jython_path + '"'
+                    os.system(command)
+                else:
+                    self.xml_path = self.img_path.strip(".tif") + ".xml"
+                
+                    # call jython script as a subprocess
+                    pipe = Popen([executable,'--ij2','--headless', '--run', f"{jython_path}"], stdout=PIPE)
+                    # wait for xml file to be created
+                    try:
+                        while not os.path.isfile(self.xml_path):
+                            time.sleep(3)
+                            continue
+                    except: 
+                        KeyboardInterrupt
+                        sys.exit(0)
+                    # kill subprocess
+                    pipe.kill()
+                    # print output
+                    print(pipe.communicate()[0].decode('ascii'))
+  
             # Set xml path to image path
             self.xml_path = self.img_path.strip(".tif") + ".xml"
 
- 
-            print("XMLfile saved to: ", self.xml_path)
         # Generate csv file from xml file
+        self.xml = self.img_folder.strip(".tif") + ".xml"
+  
         self.csv = trackmate_xml_to_csv(self.xml_path, get_tracks = True)
 
     def save_csv(self):
@@ -401,12 +393,11 @@ class CellSegmentationTracker:
 
 
 # tests:
-# Get it working without gui
-# include merging tiffs
 # get it working using models in ./models[also, fix model_path for user who simply can choose a must]
-# get it working with all args() DOES DICT ARG WORK?
 # fix naming
 #fix xml output path
+
+# console med non headlesS?
 
 
 def main():
@@ -419,12 +410,10 @@ def main():
 
     show_output = True
     cellpose_dict = {'USE_GPU': True}
-    trackmate_dict = {'MAX_FRAME_GAP': 3}
-  
+
     cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, image_path, \
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, trackmate_dict=trackmate_dict)
-    print(cst.cellpose_dict)
-    print(cst.trackmate_dict)
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict,)
+
     cst.save_csv()
     print("you made it bro")
 
