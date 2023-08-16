@@ -9,19 +9,19 @@
     <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">project_title</h3>
+<h3 align="center">CellSegmentationTracker</h3>
 
   <p align="center">
-    project_description
+    A package intended to make cell segmentation, tracking and subsequent (mostly biophysical) statisticial analysis easy
     <br />
     <a href="https://github.com/github_username/repo_name"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/github_username/repo_name">View Demo</a>
+    <a href="https://github.com/simonguld/CellSegmentationTracker.git">View Demo</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Report Bug</a>
+    <a href="https://github.com/simonguld/CellSegmentationTracker.git">Report Bug</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Request Feature</a>
+    <a href="https://github.com/simonguld/CellSegmentationTracker.git">Request Feature</a>
   </p>
 </div>
 
@@ -45,7 +45,8 @@
       </ul>
     </li>
     <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#pretrained-models">Pretrained Models</a></li>
+    <li><a href="#documentation">Documentation</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -60,7 +61,7 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-Here's a blank template to get started: To avoid retyping too much info. Do a search and replace with your text editor for the following: `github_username`, `repo_name`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `project_title`, `project_description`
+REMEMBER to pay homage to cellpose, trackmate
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -186,10 +187,9 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <!-- CONTACT -->
 ## Contact
+Simon Guldager Andersen - guldager.simon@gmail.com
 
-Your Name - [@twitter_handle](https://twitter.com/twitter_handle) - email@email_client.com
-
-Project Link: [https://github.com/github_username/repo_name](https://github.com/github_username/repo_name)
+Project Link: [https://github.com/simonguld/CellSegmentationTracker.git](https://github.com/simonguld/CellSegmentationTracker.git)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -197,7 +197,7 @@ Project Link: [https://github.com/github_username/repo_name](https://github.com/
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-
+Amin, Natascha, Valeriia, tyskeren?
 * []()
 * []()
 * []()

@@ -42,20 +42,12 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 
 
-## necessary args:
-
-# if working pipeline:
-# path to tif images, recropping argument, trackmate arguments, cellpose arguments, choice of model, save_img = True, 
-
-# if not working pipeline
-# path to (possibly) xml and definityely csv spot track edge files
 
 ##TODO:
 
 ##ESSENTIAL (DO FIRST)
-
-
-## decide which members should be private
+# decide which members should be private
+# add docstring to class
 
 ## NONESSENTIAL (IF TIME)
 # resize img
