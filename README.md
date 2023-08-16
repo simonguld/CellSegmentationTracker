@@ -55,8 +55,9 @@ show_segmentation = False, cellpose_dict = dict(), trackmate_dict = dict()):
                    * **image_folder**(str, default = None) -
 
 
-**Parameters:**    * **imagej_filepath**(str) - The file path to the ImageJ/Fiji executable. This is required for launching ImageJ macros.
-                    * **cellpose_python_filepath**(str) - The file path to the Cellpose Python script or module. This script/module is used to perform cell segmentation.
+**Parameters:**    
+                   - **imagej_filepath**(str) - The file path to the ImageJ/Fiji executable. This is required for launching ImageJ macros.
+                   - **cellpose_python_filepath**(str) - The file path to the Cellpose Python script or module. This script/module is used to perform cell segmentation.
                     * **image_folder**(str, default=None) - The folder containing input images for processing. If provided, the class will process all images within this folder.
                     * **xml_path**(str, default=None) - The path to an XML file containing additional configuration or metadata. This can be used to customize the processing behavior.
                     * **output_folder**(str, default=None) - The folder where output files will be saved. If not specified, a default output folder will be used.
