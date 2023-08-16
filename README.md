@@ -72,25 +72,25 @@ This is an example of how you may give instructions on setting up your project l
 To get a local copy up and running follow these simple example steps.
 
 ### Prerequisites
-
-* Cellpose (in virtual environmate)
-* Fiji -> trackmate-cellpose
-* Java 8, Jython
-* whatever packages I'm using (in a nice format? Possibly to allow pip install ...)
-python 3.9
+* Python 3.9 (possibly 3.8 and/or 3.10 will work as well)
+* Java 8
+* Jython 2.7
+* Fiji 2.9, and the TrackMate-Cellpose extension
+* Cellpose 2.0 (in a virtual environment)
 
 ### Installation
 
 1. Download and unpack the newest version of Fiji. Follow the instructions on https://imagej.net/software/fiji/downloads.
 2. (??) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
-3. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
-4. Create a virtual enviroment called cellpose using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed
-5. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
+3. Download and install Jython. Follow the instructions on https://www.jython.org/installation.html
+4. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
+5. Create a virtual environment called cellpose using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed
+6. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
 
    ```
    python -m pip install git+https://github.com/simonguld/CellSegmentationTracker.git
    ```
-6. Now you should be good to go!
+7. Now you should be good to go!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
