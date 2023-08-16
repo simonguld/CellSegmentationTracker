@@ -52,11 +52,6 @@ output_folder = None, use_model = 'CYTO', custom_model_path = None, show_segment
 cellpose_dict = {}, trackmate_dict = {}):
 ```
 
-**Parameters:**    * **imagej_filepath**(str) - 
-                   * **cellpose_python_filepath**(str) - 
-                   * **image_folder**(str, default = None) -
-
-
 **Parameters:**    
 - **imagej_filepath** (str): The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder
 - **cellpose_python_filepath** (str): The file path to the Cellpose Python program. It can be found in the virtual environment created for running cellpose
