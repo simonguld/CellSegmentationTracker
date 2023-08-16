@@ -54,21 +54,19 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ##ESSENTIAL (DO FIRST)
 
-# extend model path to be relative you know
-# fig out a good way to name trackmate xmls
-# extend args so as to be able to choose model(place it in models folder, such that ..\models\model kan be used to access model from this directory)
 
-# evt omskriv model_path til use_model, hvis du får relativ ting path til at # udvid xml-loader
+## decide which members should be private
 
 ## NONESSENTIAL (IF TIME)
 # resize img
 # make naming of xml and csv files more flexible
+# make roubst under other image formats?
 
 
 class CellSegmentationTracker:
 
     def __init__(self, imagej_filepath, cellpose_python_filepath, image_folder = None, xml_path = None, output_folder = None,
-                  use_model = 'CYTO', custom_model_path = None, show_segmentation = False, cellpose_dict = dict(), trackmate_dict = dict(),):
+                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(),):
 
         self.img_folder = image_folder
         self.img_path = None
@@ -76,9 +74,11 @@ class CellSegmentationTracker:
         self.imagej_filepath = imagej_filepath
         self.fiji_folder_path = os.path.abspath(os.path.join(self.imagej_filepath, os.pardir))
         self.cellpose_python_filepath = cellpose_python_filepath
+        self.use_model = use_model
         self.custom_model_path = custom_model_path
         self.output_folder = output_folder
         self.current_path = os.getcwd()
+        self.parent_dir = os.path.abspath(os.path.join(self.current_path, os.pardir))
 
         self.show_segmentation = show_segmentation
         self.cellpose_dict = cellpose_dict
@@ -86,13 +86,26 @@ class CellSegmentationTracker:
         self.use_model = use_model
         self.jython_dict = {}
 
+        self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI1']
+        self.pretrained_models_paths = [os.path.join(self.parent_dir, 'models', 'models', 'cyto_0'), os.path.join(self.parent_dir, 'models', 'models', 'cyto_1'),\
+                                        os.path.join(self.parent_dir, 'models', 'models', 'nuclei'), os.path.join(self.parent_dir, 'models', 'epi1')]
+        if self.custom_model_path is not None:
+            self.use_model = 'CUSTOM'
+        # If custom model is not provided, find the path of the pretrained model
+        if self.custom_model_path is None and use_model not in self.pretrained_models:
+            raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)
+        elif self.custom_model_path is None and use_model in self.pretrained_models:
+            idx = self.pretrained_models.index(use_model)
+            self.custom_model_path = self.pretrained_models_paths[idx]
+        
+
         self.cellpose_default_values = {
             'TARGET_CHANNEL' : 0,
             'OPTIONAL_CHANNEL_2': 0,
             'CELLPOSE_PYTHON_FILEPATH': self.cellpose_python_filepath,
-            'CELLPOSE_MODEL': 'CYTO',
-            'CELLPOSE_MODEL_FILEPATH': self.cellpose_python_filepath,
-            'CELL_DIAMETER': 30.0,
+            'CELLPOSE_MODEL': self.use_model,
+            'CELLPOSE_MODEL_FILEPATH': self.custom_model_path,
+            'CELL_DIAMETER': 0.0,
             'USE_GPU': False,
             'SIMPLIFY_CONTOURS': True
             }
@@ -154,7 +167,8 @@ class CellSegmentationTracker:
                 with open(os.path.join(self.current_path,"jython_dict.json"), 'w') as fp:
                     json.dump(self.jython_dict, fp)
 
-
+                print("self.custom_model_path: ", self.custom_model_path)
+                print("self.use_model: ", self.use_model)
                 # Run jython script
                 os.chdir(self.fiji_folder_path)
                 executable = list(os.path.split(self.imagej_filepath))[-1]
@@ -199,15 +213,6 @@ class CellSegmentationTracker:
 
         
 
-
-# tests:
-# get it working using models in ./models[also, fix model_path for user who simply can choose a must]
-# fix naming
-#fix xml output path
-
-# console med non headlesS?
-
-
 def main():
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
     input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
@@ -220,7 +225,7 @@ def main():
     cellpose_dict = {'USE_GPU': True}
 
     cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, image_path, \
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict,)
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI1')
 
     cst.save_csv()
     print("you made it bro")
