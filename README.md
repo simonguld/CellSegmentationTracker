@@ -75,7 +75,7 @@ can be used for postprocess analysis
     - ALLOW_TRACK_MERGING (bool, default = True): If True then the tracker will perform tracklets or segments merging, that is: have two or more tracklet endings linking to one tracklet beginning. This leads to tracks possibly fusing together across time.
     - ALLOW_TRACK_SPLITTING (bool, default = True): If True then the tracker will perform tracklets or segments splitting, that is: have one tracklet ending linking to two or more tracklet beginnings . This leads to tracks possibly separating into several sub-tracks across time, like in cell division.                 
 
-**Methods: **
+**Methods:**
 
 **Attributes:**
 
