@@ -20,7 +20,7 @@ from matplotlib.patches import Ellipse
 from cycler import cycler
 from skimage.io import imread
 
-from utils import trackmate_xml_to_csv, merge_tiff
+from .utils import trackmate_xml_to_csv, merge_tiff
 
 ## Change directory to current one
 dir_path = os.path.dirname(os.path.realpath(__file__))
