@@ -17,10 +17,9 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import rcParams
-from matplotlib.patches import Ellipse
 from cycler import cycler
 
-from utils import trackmate_xml_to_csv, merge_tiff
+from cellsegmentationtracker.utils import trackmate_xml_to_csv, merge_tiff
 
 ## Change directory to current one
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -45,7 +44,9 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ##TODO:
 
-##ESSENTIAL (DO FIRST)
+##ESSENTIAL (DO FIRST)'
+
+# gå igennem koden og debug, fx lige nu måske et problem hvis man giver en folder med kun en tif fil
 # decide which members should be private
 # add docstring to class
 
@@ -57,30 +58,33 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 class CellSegmentationTracker:
 
-    def __init__(self, imagej_filepath, cellpose_python_filepath, image_folder = None, xml_path = None, output_folder = None,
+    def __init__(self, imagej_filepath, cellpose_python_filepath, image_folder_path = None, xml_path = None, output_folder_path = None,
                   use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(),):
 
-        self.img_folder = image_folder
+        self.img_folder = image_folder_path
         self.img_path = None
         self.xml_path = xml_path
         self.imagej_filepath = imagej_filepath
-        self.fiji_folder_path = os.path.abspath(os.path.join(self.imagej_filepath, os.pardir))
-        self.cellpose_python_filepath = cellpose_python_filepath
-        self.use_model = use_model
+        self.cellpose_python_filepath = cellpose_python_filepath   
         self.custom_model_path = custom_model_path
-        self.output_folder = output_folder
+        self.output_folder = output_folder_path
         self.current_path = os.getcwd()
-        self.parent_dir = os.path.abspath(os.path.join(self.current_path, os.pardir))
+        self.__parent_dir = os.path.abspath(os.path.join(self.current_path, os.pardir))
+        self.__fiji_folder_path = os.path.abspath(os.path.join(self.imagej_filepath, os.pardir))
 
+        self.use_model = use_model
         self.show_segmentation = show_segmentation
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
-        self.use_model = use_model
         self.jython_dict = {}
 
+        self.csv = None
+
         self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI1']
-        self.pretrained_models_paths = [os.path.join(self.parent_dir, 'models', 'models', 'cyto_0'), os.path.join(self.parent_dir, 'models', 'models', 'cyto_1'),\
-                                        os.path.join(self.parent_dir, 'models', 'models', 'nuclei'), os.path.join(self.parent_dir, 'models', 'epi1')]
+        self.pretrained_models_paths = [os.path.join(self.__parent_dir, 'models', 'models', 'cyto_0'), \
+                                        os.path.join(self.__parent_dir, 'models', 'models', 'cyto_1'),\
+                                        os.path.join(self.__parent_dir, 'models', 'models', 'nuclei'), \
+                                            os.path.join(self.__parent_dir, 'models', 'epi1')]
         if self.custom_model_path is not None:
             self.use_model = 'CUSTOM'
         # If custom model is not provided, find the path of the pretrained model
@@ -108,20 +112,20 @@ class CellSegmentationTracker:
                                          'ALLOW_TRACK_MERGING': True,
              }
 
-        self.csv = None
         
+    
         # If no xml file is provided (or present in image folder), cell segmentation, tracking and generation of an xml file is performed
         if self.xml_path is None:
             # If no image folder is provided, raise error
             if self.img_folder is None:
                 raise ValueError("No image folder nor xml file provided!")
-
+            # If .tif file is provided instead of folder, handle it
             if self.img_folder[-4:] == ".tif":
                 self.img_path = self.img_folder
                 self.img_folder = os.path.abspath(os.path.join(self.img_folder, os.pardir))
             # If more than one .tif file is provided, merge them into one
             else:
-                # Make so that such a file has not already been created    
+                # Make sure that such a file has not already been created    
                 self.img_path = os.path.join(self.img_folder, "merged.tif")
                 if os.path.isfile(self.img_path):
                     os.remove(self.img_path)
@@ -133,7 +137,7 @@ class CellSegmentationTracker:
                 pass
             else:
                 # Generate dictionary for jython script, if not already provided
-                self.jython_dict.update({"IMG_PATH": self.img_path, "FIJI_FOLDER_PATH": self.fiji_folder_path, \
+                self.jython_dict.update({"IMG_PATH": self.img_path, "FIJI_FOLDER_PATH": self.__fiji_folder_path, \
                                     "CELLPOSE_PYTHON_FILEPATH": self.cellpose_python_filepath, "CUSTOM_MODEL_PATH": self.custom_model_path,
                                     "OUTPUT_PATH": self.output_folder, "SHOW_SEGMENTATION": self.show_segmentation})
                 
@@ -162,7 +166,7 @@ class CellSegmentationTracker:
                 print("self.custom_model_path: ", self.custom_model_path)
                 print("self.use_model: ", self.use_model)
                 # Run jython script
-                os.chdir(self.fiji_folder_path)
+                os.chdir(self.__fiji_folder_path)
                 executable = list(os.path.split(self.imagej_filepath))[-1]
                 jython_path = os.path.join(self.current_path, "jython_cellpose.py")
 

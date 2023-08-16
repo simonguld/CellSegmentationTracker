@@ -1,10 +1,11 @@
 #from cellsegmentationtracker import CellSegmentationTracker
 
-import cellsegmentationtracker
+from cellsegmentationtracker import utils
 
 
 def main():
-    print(cellsegmentationtracker.__version__)
+    #print(cellsegmentationtracker.__version__)
+    pass
     
 
 if __name__ == '__main__':
