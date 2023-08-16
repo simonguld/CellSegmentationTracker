@@ -80,18 +80,15 @@ To get a local copy up and running follow these simple example steps.
 
 ### Installation
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```sh
-   git clone https://github.com/github_username/repo_name.git
+1. Download and unpack the newest version of Fiji. Follow the instructions on https://imagej.net/software/fiji/downloads.
+2. (??) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
+3. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
+4. Create a virtual enviroment called cellpose. Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, 
+consider installing the gpu-version; it drastically increases the segmentation speed
+5. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
+
    ```
-3. Install NPM packages
-   ```sh
-   npm install
-   ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
+   python -m pip install git+https://github.com/simonguld/CellSegmentationTracker.git
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
