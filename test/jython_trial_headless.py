@@ -181,4 +181,3 @@ writer.appendModel(model)
 writer.appendSettings(settings)
 writer.writeToFile()
      
-print("you actually made it bro")

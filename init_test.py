@@ -1,10 +1,10 @@
 #from cellsegmentationtracker import CellSegmentationTracker
 
-from cellsegmentationtracker import merge_tiff, CellSegmentationTracker
+import cellsegmentationtracker
 
 
 def main():
-    pass
+    print(cellsegmentationtracker.__version__)
     
 
 if __name__ == '__main__':
