@@ -10,7 +10,8 @@ import tifftools
 import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as et
-
+from skimage.io import imread
+from skimage.transform import resize
 
 
 ## FUNCTIONS:
@@ -64,8 +65,13 @@ def merge_tiff(im_dir, img_out_name):
     imgo = imread(img_out_name)
     imgs = [imread(e) for e in img_in_names]
 
+
     if len(img_in_names) in (3, 4):  # @TODO:
         imgo = imgo.transpose((2, 0, 1))
+
+    print("Output file details: {:}, {:}".format(imgo.shape, imgo.dtype))
+    print("Input files details: {:}".format([(img.shape, img.dtype) for img in imgs]))
+    return
 
 def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_tracks=True):
     """
@@ -236,5 +242,24 @@ def print_all_possible_spot_features():
                     }
     
     print(object_labels.values())
+    return
 
+
+def main():
+    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+
+    new_width, new_height = 100, 120
+    #data = tifftools.read_tiff(path)
+    data = imread(path)
+    data = tifftools.read_tiff(path)
+    print(data.shape, type(data))
+    print(np.swapaxes(data, 0, 2).shape)
+    new_shape = (new_height, new_width, data.shape[2])
+    resized_data = resize(data, new_shape, anti_aliasing=True)
+    tifftools.write_tiff(resized_data, path.strip('.tif') + '_resized.tif')
+    print(resized_data.shape)
+
+
+if __name__ == "__main__":
+    main()
 

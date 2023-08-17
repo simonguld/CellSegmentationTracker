@@ -7,7 +7,7 @@ setup(
     author_email='guldager.simon@gmail.com',
     url='https://github.com/simonguld/CellSegmentationTracker',
     description='Package for cell segmentation, tracking and subsequent (biophysical) statistical analysis',
-    install_requires=["tifftools", "seaborn"],
+    install_requires=["tifftools", "seaborn", "scikit-image"],
     packages=find_packages(include=['cellsegmentationtracker', 'cellsegmentationtracker.*']),
 
     classifiers=[

@@ -55,7 +55,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # dokumenter løbende
 # efterprøv at de virker
 
-# add cellprob, flow_thres til docs, anaconda
 
 # fix cellmask color if possible(se på features/featureutils.java)
 # add docstring to class
