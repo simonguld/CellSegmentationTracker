@@ -14,12 +14,39 @@ import xml.etree.ElementTree as et
 
 
 ## FUNCTIONS:
+
+def prepend_text_to_file(file_path, text):
+    """
+    Prepend text to a file.
+    """
+    with open(file_path, 'r+') as file:
+        content = file.read()
+        file.seek(0, 0)
+        file.write(text.rstrip('\r\n') + '\n' + content)
+        file.close()
+    return
+
+def search_and_modify_file(file_path, search_string, modify_string):
+    """
+    Search for a string in a file and replace it with another string.
+    """
+    with open(file_path, 'r') as file:
+        filedata = file.read()
+    filedata = filedata.replace(search_string, modify_string)
+    with open(file_path, 'w') as file:
+        file.write(filedata)
+        file.close()
+    return
+
 def get_imlist(path, format = '.jpg'):
 
     """
     returns a list of filenames for all png images in a directory
     """
-    return [os.path.join(path,f) for f in os.listdir(path) if f.endswith(format)]
+    if os.path:
+        return [os.path.join(path,f) for f in os.listdir(path) if f.endswith(format)]
+    else:
+        raise OSError("No such directory: " + path)
 
 def merge_tiff(im_dir, img_out_name):
     img_in_names = get_imlist(im_dir, format = '.tif')
