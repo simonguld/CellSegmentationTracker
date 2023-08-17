@@ -14,11 +14,7 @@
   <p align="center">
     A package intended to make cell segmentation, tracking and subsequent (mostly biophysical) statisticial analysis easy
     <br />
-    <a href="https://github.com/github_username/repo_name"><strong>Explore the docs »</strong></a>
     <br />
-    <br />
-    <a href="https://github.com/simonguld/CellSegmentationTracker.git">View Demo</a>
-    ·
     <a href="https://github.com/simonguld/CellSegmentationTracker.git">Report Bug</a>
     ·
     <a href="https://github.com/simonguld/CellSegmentationTracker.git">Request Feature</a>
