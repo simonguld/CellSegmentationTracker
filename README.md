@@ -61,7 +61,8 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-REMEMBER to pay homage to cellpose, trackmate
+REMEMBER to pay homage to cellpose, trackmate.
+THis cool package can do things like ..... + mod cellpose such that flow_threshold and cellprob_threshold can be modified
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -78,14 +79,15 @@ To get a local copy up and running follow these simple example steps.
 * Jython 2.7
 * Fiji 2.9, and the TrackMate-Cellpose extension
 * Cellpose 2.0 (in a virtual environment)
-
+* Anaconda
+  
 ### Installation
 
 1. Download and unpack the newest version of Fiji. Follow the instructions on https://imagej.net/software/fiji/downloads.
 2. (??) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
 3. Download and install Jython. Follow the instructions on https://www.jython.org/installation.html
 4. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
-5. Create a virtual environment called cellpose using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed
+5. Create an Anaconda virtual environment called cellpose using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
 6. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
 
    ```
@@ -158,6 +160,8 @@ can be used for postprocess analysis
     - CELL_DIAMETER (positive int, default = 0): Estimate of the cell diameter in the image, in physical units. Enter the value ‘0’ to have cellpose automatically determine the cell size estimate.
     - USE_GPU (boolean, default = False)
     - SIMPLIFY_CONTOURS (boolean, default = True): If True the 2D contours detected will be simplified. If False, they will follow exactly the pixel borders.
+    - FLOW_THRESHOLD (positive float, default = 0.4): The maximum allowed error of the flows for each mask. The default is flow_threshold=0.4. Increase this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, decrease this threshold if cellpose is returning too many ill-shaped ROIs.
+    - CELLPROB_THRESHOLD (float in [-6, 6]): The pixels greater than the cellprob_threshold are used to run dynamics and determine ROIs. The default is cellprob_threshold=0.0. Decrease this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, increase this threshold if cellpose is returning too ROIs particularly from dim areas.
 - **trackmate_dict: (dict, default=dict())**
   - A dictionary containing parameters for configuring the TrackMate LAPTracker. It has the following keys:
       - LINKING_MAX_DISTANCE (float, default = 15.0): The max distance between two consecutive spots, in pixel units, allowed for creating links.
@@ -207,10 +211,13 @@ Project Link: [https://github.com/simonguld/CellSegmentationTracker.git](https:/
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-Amin, Natascha, Valeriia, tyskeren?
-* []()
-* []()
-* []()
+* <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/654165">Asst. Prof. Amin Doostmohammadi, University of Copenhagen,</a></a> for conceiving the idea for this project, and for providing me with guidance and valuable insights along the way
+* <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/387701">Asst. Prof. Natascha Leijnse, University of Copenhagen,</a></a> for ..
+* <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/760892">Ph.d. Fellow Valeriia Grudtsyna, University of Copenhagen,</a></a> for ..
+* <a align="left"><a href="https://forskning.ku.dk/soeg/result/?pure=da%2Fpersons%2Fmari-tolonen(07bd9ae5-3531-4e88-9259-e67ef38856b8).html">Ph.d. Fellow Mari Tolonen, University of Copenhagen, </a></a> for ..
+
+FINALLY, Cellpose and trackmate
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 =======
