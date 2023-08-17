@@ -55,7 +55,6 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
 
 REMEMBER to pay homage to cellpose, trackmate.
 THis cool package can do things like ..... + mod cellpose such that flow_threshold and cellprob_threshold can be modified
@@ -74,7 +73,7 @@ To get a local copy up and running follow these simple example steps.
 * Java 8
 * Jython 2.7
 * Fiji 2.9, and the TrackMate-Cellpose extension
-* Cellpose 2.0 (in a virtual environment)
+* Cellpose 2.0
 * Anaconda
   
 ### Installation
