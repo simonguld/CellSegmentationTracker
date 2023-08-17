@@ -47,8 +47,9 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 ##ESSENTIAL (DO FIRST)'
 
 # mod cellpose (forsøg dynamisk) og verificer.
-#--> verificer class og readme til at tage de argumenter.
-# Træn modeller en for en og: 
+
+# Opsplit billedserier og resize
+# Træn modeller en for en og: NB: 1 dårligt billede i nuclear data
 # kvalitetsforskel på store/små billedeR?
 # gem billeder af gode/dårlige sekventeringer +parametre
 # dokumenter løbende
@@ -190,7 +191,7 @@ class CellSegmentationTracker:
         self.csv = trackmate_xml_to_csv(self.xml_path, get_tracks = True)
 
 
-    # Private methods
+    #### Private methods ####
 
     def __prepare_images(self):
         """
@@ -313,7 +314,7 @@ class CellSegmentationTracker:
         return
     
 
-    # Public methods
+    #### Public methods ####
 
     def save_csv(self, name = 'TrackMate.csv'):
         path_out = os.path.join(self.output_folder, name)
