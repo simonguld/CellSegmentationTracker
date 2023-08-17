@@ -82,7 +82,7 @@ To get a local copy up and running follow these simple example steps.
 2. (??) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
 3. Download and install Jython. Follow the instructions on https://www.jython.org/installation.html
 4. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
-5. Create an Anaconda virtual environment called cellpose using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
+5. Create an Anaconda virtual environment using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
 6. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
 
    ```
@@ -93,11 +93,16 @@ To get a local copy up and running follow these simple example steps.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- USAGE -->
-## Usage
+## Usage and limitations
 * how to import
 * documentation + link
 * example_notebook
 * images must be tif
+* limitations
+  - poss. anaconda but at least the format venv/lib/site-packages/cellpose,
+  - trained on greyscale,
+  - 2D
+  - LAPTracker
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -168,7 +173,6 @@ can be used for postprocess analysis
 **Attributes:**
 
 **Methods:**
-
 
 <!-- CONTRIBUTING -->
 ## Contributing
