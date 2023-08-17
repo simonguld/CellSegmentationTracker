@@ -93,7 +93,7 @@ To get a local copy up and running follow these simple example steps.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- USAGE -->
-## Usage and limitations
+## Usage and Limitations
 * how to import
 * documentation + link
 * example_notebook
@@ -107,7 +107,7 @@ To get a local copy up and running follow these simple example steps.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- PRETRAINED MODELS -->
-## Pretrained models
+## Pretrained Models
 
 
 <!-- DOCUMENTATION -->
