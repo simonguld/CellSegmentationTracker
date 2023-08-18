@@ -60,8 +60,9 @@ show_output = param_dict['SHOW_SEGMENTATION']
 imp  = IJ.openImage( image_path)
 dims = imp.getDimensions()
 
-# Make sure dimensions are correct
-imp.setDimensions( dims[ 2 ], dims[ 4 ], dims[ 3 ] )
+# Make sure dimensions are correct (Format must be: [x,y,c,z,t])
+if dims[3] > dims[4]:
+        imp.setDimensions(dims[ 2 ], dims[ 4 ], dims[ 3 ] )
 cal = imp.getCalibration()
 
 # Logger -> content will be saved in the XML file.

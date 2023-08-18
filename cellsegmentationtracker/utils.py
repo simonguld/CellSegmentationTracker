@@ -12,6 +12,7 @@ import pandas as pd
 import xml.etree.ElementTree as et
 from skimage.io import imread
 from skimage.transform import resize
+from PIL import Image
 
 
 ## FUNCTIONS:
@@ -49,13 +50,61 @@ def get_imlist(path, format = '.jpg'):
     else:
         raise OSError("No such directory: " + path)
 
-def merge_tiff(im_dir, img_out_name):
+def resize_imlist(im_dir, target_width, target_height, output_dir = None):
+    """
+    Resize all images in a directory to target_width x target_height
+    """
+    if output_dir is None:
+        output_dir = im_dir  + f"_resized_{target_width}x{target_height}"
+        os.mkdir(output_dir)
+        print("Images will be saved in: " + output_dir)
+    im_list = get_imlist(im_dir, format = '.tif')
+    
+    for i, f in enumerate(im_list):
+        im = Image.open(f).resize((target_width,target_height))
+        file_name = f"im{i}"
+        im.save(os.path.join(output_dir , f"{file_name}.tif"))
+    return
+
+def resize_tif(im_path, target_width, target_height, Nframes = None):
+    """
+    Resize a single tif image (possibly a stack) to target_width x target_height
+    """
+    im_dir = os.path.dirname(im_path)
+    im_path_new = im_path.strip(".tif") + f"_resized_{target_width}x{target_height}.tif"
+
+    
+    # If only 1 frame is present, simply resize and save
+    if imread(im_path).ndim == 2:
+        im = Image.open(f).resize((target_width,target_height))
+        im.save(im_path_new)
+    else:
+        # Create directory for resized images
+        output_dir = os.path.join(im_dir, f"_resized_{target_width}x{target_height}")
+        os.mkdir(output_dir)
+        # Split tif file
+        info = tifftools.read_tiff(im_path)
+        for ifd in info['ifds']:
+            tifftools.write_tiff(ifd, im_path_new)
+        # Resize all images in directory
+        resize_imlist(output_dir, target_width, target_height, Nframes)
+        # Merge resized images
+        merge_tiff(output_dir, im_path_new, Nframes)
+        # Delete resized images
+        os.rmdir(output_dir)
+        os.rmdir(output_dir + f"_resized_{target_width}x{target_height}")
+    return
+
+
+def merge_tiff(im_dir, img_out_name, Nframes = None):
     img_in_names = get_imlist(im_dir, format = '.tif')
+    Nframes = len(img_in_name) if Nframes is None else Nframes
     if not img_in_names:
         print("No image!!!")
         return -1
     t = tifftools.read_tiff(img_in_names[0])
-    for img_in_name in img_in_names[1:]:
+
+    for img_in_name in img_in_names[1:Nframes]:
         t["ifds"].extend(tifftools.read_tiff(img_in_name)["ifds"])
 
     if os.path.isfile(img_out_name):
@@ -246,18 +295,78 @@ def print_all_possible_spot_features():
 
 
 def main():
+    import tifffile
+    from PIL import Image
     path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+    new_path = path.strip(".tif") + "_resized.tif"
+    path2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped.tif"
+    path3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data\\im0.tif"
+    path4 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
+    path5 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged0.tif"
 
-    new_width, new_height = 100, 120
-    #data = tifftools.read_tiff(path)
-    data = imread(path)
-    data = tifftools.read_tiff(path)
-    print(data.shape, type(data))
-    print(np.swapaxes(data, 0, 2).shape)
-    new_shape = (new_height, new_width, data.shape[2])
-    resized_data = resize(data, new_shape, anti_aliasing=True)
-    tifftools.write_tiff(resized_data, path.strip('.tif') + '_resized.tif')
-    print(resized_data.shape)
+
+    dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
+    dir2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\medium_zoom"
+    target_width = 698
+    target_height = 648
+
+    resize_imlist(dir, target_width, target_height)
+    resize_imlist(dir2, target_width, target_height)
+
+    if 0:
+        #STEP 1: does imp work for Nframes,W,H?
+
+        par_dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject"
+        dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\nuclei"
+        target_width = 698
+        target_height = 648
+        new_dir = dir  + f"_resized_{target_width}x{target_height}"
+        os.mkdir(new_dir)
+        im_list = get_imlist(dir, format = '.tif')
+        
+    
+        for i, f in enumerate(im_list):
+            im = Image.open(f).resize((target_width,target_height))
+            file_name = f"im{i}"
+            print(os.path.join(new_dir,f"{file_name}.tif"))
+            im.save(os.path.join(new_dir , f"{file_name}.tif"))
+
+        merge_tiff(new_dir, par_dir + "\\merged.tif", Nframes = 4)
+
+
+    if 0:
+
+        imgo = imread(path4)
+        print(imgo.shape, type(imgo))
+
+        if 1:
+            for p in [path]: #, path2, path3, path4]:
+                data = tifffile.imread(p)
+                print(data.shape, type(data))
+                print("Assuming W x H x Nchannels x Nframes")
+                shape = data.shape
+                new_shape = (100,100, shape[0])
+                resized_data = resize(data, new_shape, anti_aliasing=True)
+                print(resized_data.shape)
+                tifffile.imwrite(new_path, resized_data, planarconfig='CONTIG')
+
+        #    new_d = tifffile.imread(path5)
+        #   print(new_d.shape, type(new_d))
+            
+    #     resized_data = resize(data, new_shape, anti_aliasing=True)
+
+
+            new_width, new_height = 100, 120
+            #data = tifftools.read_tiff(path)
+            #data = imread(path)
+        # data = tifftools.read_tiff(path)
+        #   print(data.shape, type(data))
+        if 0:
+            print(np.swapaxes(data, 0, 2).shape)
+            new_shape = (new_height, new_width, data.shape[2])
+            resized_data = resize(data, new_shape, anti_aliasing=True)
+            tifftools.write_tiff(resized_data, path.strip('.tif') + '_resized.tif')
+            print(resized_data.shape)
 
 
 if __name__ == "__main__":

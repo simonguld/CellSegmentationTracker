@@ -49,11 +49,14 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # mod cellpose (forsøg dynamisk) og verificer.
 
 # Opsplit billedserier og resize
+### NBNBNBNBNBNBNBNBNB!!!! Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account!
 # Træn modeller en for en og: NB: 1 dårligt billede i nuclear data
 # kvalitetsforskel på store/små billedeR?
 # gem billeder af gode/dårlige sekventeringer +parametre
 # dokumenter løbende
 # efterprøv at de virker
+
+# add limitation: multi-channel images not yet supported
 
 
 # fix cellmask color if possible(se på features/featureutils.java)
@@ -119,11 +122,11 @@ class CellSegmentationTracker:
         except:
             self.cellprob_threshold = 0.0
         
-        self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI1']
+        self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500']
         self.pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
-                                            os.path.join(self.__parent_dir, 'models', 'epi1')]
+                                            os.path.join(self.__parent_dir, 'models', 'epi500')]
         if self.custom_model_path is not None:
             self.use_model = 'CUSTOM'
         # If custom model is not provided, find the path of the pretrained model
@@ -331,15 +334,19 @@ def main():
     cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
-
+    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged0.tif"
     show_output = True
     cellpose_dict = {'USE_GPU': True, 'FLOW_THRESHOLD': 10, 'CELLPROB_THRESHOLD': -5}
 
     # xml_path, outfolder, use_model = cyto2,nuclei, 
     xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, image_path,
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='CYTO2')
+    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+    new_path = path.strip(".tif") + "_resized.tif"
+    np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
+
+    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, np,
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='NUCLEI')
 
     cst.save_csv()
     print("you made it bro")
