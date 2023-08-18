@@ -327,12 +327,22 @@ def main():
     dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
     dir2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\medium_zoom"
     dir3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\nuclei"
+    dir4 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\im0"
     target_width = 698
     target_height = 648
 
+    # Create directory for resized images
+    im_path = dir4 + ".tif"
+    output_dir = dir4 + f"_split_v2"
+    os.mkdir(output_dir)
+    # Split tif file
+    info = tifftools.read_tiff(im_path)
+    for i,ifd in enumerate(info['ifds']):
+        tifftools.write_tiff(ifd, output_dir + f'im{i}.tif')
+
     for d in [dir, dir2, dir3]:
         im_path = get_imlist(d, format = '.tif')[0]
-        target_width, target_height = get_target_dimensions(im_path, division_factor = 3)
+        target_width, target_height = get_target_dimensions(im_path, division_factor = 1)
         resize_imlist(d, target_width, target_height)
 
 
