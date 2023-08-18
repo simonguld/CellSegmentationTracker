@@ -50,6 +50,21 @@ def get_imlist(path, format = '.jpg'):
     else:
         raise OSError("No such directory: " + path)
 
+def get_target_dimensions(im_path, division_factor = 1):
+    """
+    Get target dimensions for a single tif image (possibly a stack) to target_width x target_height
+    """
+    # Find image dimensions
+    img = Image.open(im_path)
+    if len(img.size) == 2:
+        target_width, target_height = int(img.width / division_factor) , int(img.height / division_factor)
+    elif img.ndim == 3:
+        if img.width > img.shape[2]:
+            target_width, target_height = int(img.width / division_factor) , int(img.height / division_factor)
+        else:
+            target_width, target_height = int(img.height / division_factor) , int(img.shape[2] / division_factor)
+    return target_width, target_height
+
 def resize_imlist(im_dir, target_width, target_height, output_dir = None):
     """
     Resize all images in a directory to target_width x target_height
@@ -66,17 +81,21 @@ def resize_imlist(im_dir, target_width, target_height, output_dir = None):
         im.save(os.path.join(output_dir , f"{file_name}.tif"))
     return
 
-def resize_tif(im_path, target_width, target_height, Nframes = None):
+def resize_tif(im_path, division_factor = 1, Nframes = None):
     """
     Resize a single tif image (possibly a stack) to target_width x target_height
     """
+
+    # Find image dimensions
+    target_width, target_height = get_target_dimensions(im_path, division_factor = division_factor)
+
     im_dir = os.path.dirname(im_path)
     im_path_new = im_path.strip(".tif") + f"_resized_{target_width}x{target_height}.tif"
+    img = imread(im_path)
 
-    
     # If only 1 frame is present, simply resize and save
-    if imread(im_path).ndim == 2:
-        im = Image.open(f).resize((target_width,target_height))
+    if img.ndim == 2:
+        im = Image.open(im_path).resize((target_width,target_height))
         im.save(im_path_new)
     else:
         # Create directory for resized images
@@ -307,11 +326,15 @@ def main():
 
     dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
     dir2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\medium_zoom"
+    dir3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\nuclei"
     target_width = 698
     target_height = 648
 
-    resize_imlist(dir, target_width, target_height)
-    resize_imlist(dir2, target_width, target_height)
+    for d in [dir, dir2, dir3]:
+        im_path = get_imlist(d, format = '.tif')[0]
+        target_width, target_height = get_target_dimensions(im_path, division_factor = 3)
+        resize_imlist(d, target_width, target_height)
+
 
     if 0:
         #STEP 1: does imp work for Nframes,W,H?

@@ -49,11 +49,13 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # mod cellpose (forsøg dynamisk) og verificer.
 
 # Opsplit billedserier og resize
+## gør flow/cellrrob funktioner af model
 ### NBNBNBNBNBNBNBNBNB!!!! Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account!
 # Træn modeller en for en og: NB: 1 dårligt billede i nuclear data
 # kvalitetsforskel på store/små billedeR?
 # gem billeder af gode/dårlige sekventeringer +parametre
-# dokumenter løbende
+# dokumenter løbende 
+# EPI500 flow, prob = 0.4, 0.5. dim 698 x 648, rad = 30. Rad skal skaleres med billedet.
 # efterprøv at de virker
 
 # add limitation: multi-channel images not yet supported
@@ -69,6 +71,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 
 ## NONESSENTIAL (IF TIME)
+# include option to give pixel=length, frame=time 
 # make naming of xml and csv files more flexible
 # make roubst under other image formats?
 
