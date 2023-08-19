@@ -46,35 +46,30 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ##ESSENTIAL (DO FIRST)'
 
-# mod cellpose (forsøg dynamisk) og verificer.
 
-# Opsplit billedserier og resize
-## gør flow/cellrrob funktioner af model
-# check at hele split merge tingen.
-### NBNBNBNBNBNBNBNBNB!!!! Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account!
-# Træn modeller en for en og: NB: 1 dårligt billede i nuclear data
-# kvalitetsforskel på store/små billedeR?
-# gem billeder af gode/dårlige sekventeringer +parametre
-# dokumenter løbende 
+# Træn sidste model + afslut doku
+## gør flow/cellrrob, rad funktioner af model
 # EPI500 flow, prob = 0.4, 0.5. dim 698 x 648, rad = 30. Rad skal skaleres med billedet.
-# efterprøv at de virker
+# EPI2500 flow,prob = 0.6,-1, rad = 37.79,
+# Prøv modeller af på de forskellige datasæt
+# gem billeder af dårlige segmenteringer 
 
-## NBNBN: merge tracks giver inkonsistente hastigheder og positioner.
-
-# add limitation: multi-channel images not yet supported
+# Lær at ekstrahere guf fra xml
+# Overvej, hvad der skal hives ud, og i hvilke objekter det skal gemmes
+# DO IT
 
 
 # fix cellmask color if possible(se på features/featureutils.java)
+
+## NBNBN: merge tracks giver inkonsistente hastigheder og positioner. Note in readme or doc
 # add docstring to class
-# #### crop tif img series????
-
-
-# resize img -- inkl crop tif image series
 ## FIX utiils --> cellsegmentationtracker.utils.
 
 
 ## NONESSENTIAL (IF TIME)
+# include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
 # include option to give pixel=length, frame=time 
+# train nuclei data. NB: 1 bad img
 # make naming of xml and csv files more flexible
 # make roubst under other image formats?
 
