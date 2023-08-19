@@ -114,6 +114,18 @@ def resize_tif(im_path, division_factor = 1, Nframes = None):
         os.rmdir(output_dir + f"_resized_{target_width}x{target_height}")
     return
 
+def split_tiff(im_path):
+    """
+    Split a tif file containing multiple frames into multiple tif files
+    """
+    im_dir = os.path.dirname(im_path)
+    output_dir = im_path.strip(".tif") + f"_split"
+    os.mkdir(output_dir)
+    # Split tif file
+    info = tifftools.read_tiff(im_path)
+    for i,ifd in enumerate(info['ifds']):
+        tifftools.write_tiff(ifd, os.path.join(output_dir, f'im{i}.tif'))
+    return
 
 def merge_tiff(im_dir, img_out_name, Nframes = None):
     img_in_names = get_imlist(im_dir, format = '.tif')
@@ -320,8 +332,7 @@ def main():
     new_path = path.strip(".tif") + "_resized.tif"
     path2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped.tif"
     path3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data\\im0.tif"
-    path4 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
-    path5 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged0.tif"
+ 
 
 
     dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
@@ -331,19 +342,53 @@ def main():
     target_width = 698
     target_height = 648
 
-    # Create directory for resized images
-    im_path = dir4 + ".tif"
-    output_dir = dir4 + f"_split_v2"
-    os.mkdir(output_dir)
-    # Split tif file
-    info = tifftools.read_tiff(im_path)
-    for i,ifd in enumerate(info['ifds']):
-        tifftools.write_tiff(ifd, output_dir + f'im{i}.tif')
 
-    for d in [dir, dir2, dir3]:
-        im_path = get_imlist(d, format = '.tif')[0]
-        target_width, target_height = get_target_dimensions(im_path, division_factor = 1)
-        resize_imlist(d, target_width, target_height)
+    for im_path in [path, path2, path3]:
+        split_tiff(im_path)
+        dir = im_path.strip(".tif") + "_split"
+        split_im_path = get_imlist(dir, format = '.tif')[0]
+        target_width, target_height = get_target_dimensions(split_im_path, division_factor = 3)
+        resize_imlist(dir, target_width, target_height)
+        #split_tiff(im_path)
+
+        #split_tif(im_path)
+
+    if 0:
+        img = Image.open(path2)
+        img_dir = os.path.dirname(path2)
+        # Create directory for resized images
+        im_path = path2
+        output_dir = im_path.strip(".tif") + f"_split"
+        os.mkdir(output_dir)
+        # Split tif file
+        info = tifftools.read_tiff(im_path)
+        for i,ifd in enumerate(info['ifds']):
+            tifftools.write_tiff(ifd, os.path.join(output_dir, f'im{i}.tif'))
+
+
+    if 0:
+        for i in range(4):
+            try:
+                img.seek(i)
+                img.save('page_%s.tif'%(i,))
+            except EOFError:
+                break
+
+    if 0:
+
+        # Create directory for resized images
+        im_path = dir4 + ".tif"
+        output_dir = dir4 + f"_split_v2"
+        os.mkdir(output_dir)
+        # Split tif file
+        info = tifftools.read_tiff(im_path)
+        for i,ifd in enumerate(info['ifds']):
+            tifftools.write_tiff(ifd, output_dir + f'im{i}.tif')
+
+        for d in [dir, dir2, dir3]:
+            im_path = get_imlist(d, format = '.tif')[0]
+            target_width, target_height = get_target_dimensions(im_path, division_factor = 1)
+            resize_imlist(d, target_width, target_height)
 
 
     if 0:

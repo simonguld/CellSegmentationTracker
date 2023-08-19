@@ -50,6 +50,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 # Opsplit billedserier og resize
 ## gør flow/cellrrob funktioner af model
+# check at hele split merge tingen.
 ### NBNBNBNBNBNBNBNBNB!!!! Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account!
 # Træn modeller en for en og: NB: 1 dårligt billede i nuclear data
 # kvalitetsforskel på store/små billedeR?
@@ -57,6 +58,8 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # dokumenter løbende 
 # EPI500 flow, prob = 0.4, 0.5. dim 698 x 648, rad = 30. Rad skal skaleres med billedet.
 # efterprøv at de virker
+
+## NBNBN: merge tracks giver inkonsistente hastigheder og positioner.
 
 # add limitation: multi-channel images not yet supported
 
@@ -152,8 +155,8 @@ class CellSegmentationTracker:
         self.trackmate_default_values = {'LINKING_MAX_DISTANCE': 15.0,
                                          'GAP_CLOSING_MAX_DISTANCE': 15.0,
                                          'MAX_FRAME_GAP': 2,
-                                         'ALLOW_TRACK_SPLITTING': True,
-                                         'ALLOW_TRACK_MERGING': True,
+                                         'ALLOW_TRACK_SPLITTING': False,
+                                         'ALLOW_TRACK_MERGING': False,
              }
 
         
