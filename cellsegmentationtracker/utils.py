@@ -153,7 +153,7 @@ def merge_tiff(im_dir, img_out_name, Nframes = None):
     print("Input files details: {:}".format([(img.shape, img.dtype) for img in imgs]))
     return
 
-def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_tracks=True):
+def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_track_features=False, get_edge_features=False):
     """
     This function is a modification of Hadrien Mary's function from the pytrackmate python package
     ...
@@ -215,27 +215,26 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
             del object_labels[el]
     object_labels.update(minimal_labels)
 
-    features = root.find('Model').find('FeatureDeclarations').find('SpotFeatures')
-    #features = [c.get('feature') for c in features.getchildren()] + ['ID']
-    features = [c.get('feature') for c in list(features)] + ['ID']
+    spot_features = root.find('Model').find('FeatureDeclarations').find('SpotFeatures')
+    spot_features = [c.get('feature') for c in list(spot_features)] + ['ID']
 
     spots = root.find('Model').find('AllSpots')
-    trajs = pd.DataFrame([])
+    df_spots = pd.DataFrame([])
     objects = []
     for frame in spots.findall('SpotsInFrame'):
         for spot in frame.findall('Spot'):
             single_object = []
-            for label in features:
+            for label in spot_features:
                 single_object.append(spot.get(label))
             objects.append(single_object)
 
-    trajs = pd.DataFrame(objects, columns=features)
-    trajs = trajs.astype(float)
+    df_spots = pd.DataFrame(objects, columns=spot_features)
+    df_spots = df_spots.astype(float)
 
     # Apply initial filtering
     initial_filter = root.find("Settings").find("InitialSpotFilter")
 
-    trajs = filter_spots(trajs,
+    df_spots = filter_spots(df_spots,
                          name=initial_filter.get('feature'),
                          value=float(initial_filter.get('value')),
                          isabove=True if initial_filter.get('isabove') == 'true' else False)
@@ -245,40 +244,69 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
 
     for spot_filter in spot_filters.findall('Filter'):
 
-        trajs = filter_spots(trajs,
+        df_spots = filter_spots(df_spots,
                              name=spot_filter.get('feature'),
                              value=float(spot_filter.get('value')),
                              isabove=True if spot_filter.get('isabove') == 'true' else False)
 
-    trajs = trajs.loc[:, object_labels.keys()]
-    trajs.columns = [object_labels[k] for k in object_labels.keys()]
-    trajs['TRACK_ID'] = np.arange(trajs.shape[0])
+    df_spots = df_spots.loc[:, object_labels.keys()]
+    df_spots.columns = [object_labels[k] for k in object_labels.keys()]
+    df_spots['TRACK_ID'] = np.arange(df_spots.shape[0])
 
-    # Get tracks
-    if get_tracks:
-        filtered_track_ids = [int(track.get('TRACK_ID')) for track in root.find('Model').find('FilteredTracks').findall('TrackID')]
+    # Get track IDs
+    filtered_track_ids = [int(track.get('TRACK_ID')) for track in root.find('Model').find('FilteredTracks').findall('TrackID')]
 
-        label_id = 0
-        trajs['TRACK_ID'] = np.nan
+    label_id = 0
+    df_spots['TRACK_ID'] = np.nan
 
-        tracks = root.find('Model').find('AllTracks')
-        for track in tracks.findall('Track'):
+    tracks = root.find('Model').find('AllTracks')
 
-            track_id = int(track.get("TRACK_ID"))
-            if track_id in filtered_track_ids:
+    if get_track_features:
+        track_features = root.find('Model').find('FeatureDeclarations').find('TrackFeatures')
+        track_features = [c.get('feature') for c in list(track_features)]
+  
+    objects = []
+    for track in tracks.findall('Track'):
+        if get_track_features:
+            single_object = []
+            for feature in track_features:
+                single_object.append(track.get(feature))
+            objects.append(single_object)
 
-                spot_ids = [(edge.get('SPOT_SOURCE_ID'), edge.get('SPOT_TARGET_ID'), edge.get('EDGE_TIME')) for edge in track.findall('Edge')]
-                spot_ids = np.array(spot_ids).astype('float')[:, :2]
-                spot_ids = set(spot_ids.flatten())
+        track_id = int(track.get("TRACK_ID"))
+        if track_id in filtered_track_ids:
 
-                trajs.loc[trajs["Spot ID"].isin(spot_ids), "TRACK_ID"] = label_id
-                label_id += 1
+            spot_ids = [(edge.get('SPOT_SOURCE_ID'), edge.get('SPOT_TARGET_ID'), edge.get('EDGE_TIME')) for edge in track.findall('Edge')]
+            spot_ids = np.array(spot_ids).astype('float')[:, :2]
+            spot_ids = set(spot_ids.flatten())
 
-        # Label remaining columns
-        single_track = trajs.loc[trajs["TRACK_ID"].isnull()]
-        trajs.loc[trajs["TRACK_ID"].isnull(), "TRACK_ID"] = label_id + np.arange(0, len(single_track))
+            df_spots.loc[df_spots["Spot ID"].isin(spot_ids), "TRACK_ID"] = label_id
+            label_id += 1
 
-    return trajs
+    # Label remaining columns
+    single_track = df_spots.loc[df_spots["TRACK_ID"].isnull()]
+    df_spots.loc[df_spots["TRACK_ID"].isnull(), "TRACK_ID"] = label_id + np.arange(0, len(single_track))
+
+    # Extract velocities
+    df_spots['VELOCITY_X'] = np.nan
+    df_spots['VELOCITY_Y'] = np.nan
+
+    for track in np.arange(df_spots['TRACK_ID'].max()):
+        idx = df_spots.index[df_spots['TRACK_ID'] == track]
+        df_spots_res = df_spots.loc[idx].copy()
+
+        frame_gap = np.hstack([df_spots_res['Frame'].diff().values[1:], df_spots_res['Frame'].diff().values[-1:]])
+        velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / frame_gap
+        velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / frame_gap
+
+        df_spots['VELOCITY_X'].iloc[idx] = velocity_x
+        df_spots['VELOCITY_Y'].iloc[idx] = velocity_y
+
+    if get_track_features:
+        df_tracks = pd.DataFrame(objects, columns=track_features).astype(float)
+        return df_spots, df_tracks
+    else:
+        return df_spots
 
 def filter_spots(spots, name, value, isabove):
     if isabove:

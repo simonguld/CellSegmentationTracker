@@ -53,6 +53,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # EPI2500 flow,prob = 0.6,-1, rad = 37.79,
 # Prøv modeller af på de forskellige datasæt
 # gem billeder af dårlige segmenteringer 
+# gemme en test_tif i resurser to be used in ex.ipynb. Også gemme xml og csv'erne.
 
 # Lær at ekstrahere guf fra xml
 # Overvej, hvad der skal hives ud, og i hvilke objekter det skal gemmes
@@ -60,9 +61,10 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 
 # fix cellmask color if possible(se på features/featureutils.java)
-
-## NBNBN: merge tracks giver inkonsistente hastigheder og positioner. Note in readme or doc
+# limitation update: no filters, the idea is to have segmentation algorithm good enough.
+# AND ALSO: merge tracks giver inkonsistente hastigheder og positioner. Note in readme or doc [og restrict metoder til at tage højde for det]
 # add docstring to class
+
 ## FIX utiils --> cellsegmentationtracker.utils.
 
 
@@ -72,6 +74,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # train nuclei data. NB: 1 bad img
 # make naming of xml and csv files more flexible
 # make roubst under other image formats?
+# make robust under color, multichannel etc?
 
 
 class CellSegmentationTracker:
@@ -109,7 +112,8 @@ class CellSegmentationTracker:
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
         self.jython_dict = {}
-        self.csv = None
+        self.spots_csv = None
+        self.tracks_csv = None
 
         # Extract or set flow and cell probability threshold
         try:
@@ -143,6 +147,8 @@ class CellSegmentationTracker:
             'CELLPOSE_PYTHON_FILEPATH': self.cellpose_python_filepath,
             'CELLPOSE_MODEL': self.use_model,
             'CELLPOSE_MODEL_FILEPATH': self.custom_model_path,
+            'FLOW_THRESHOLD': 0.4,
+            'CELLPROB_THRESHOLD': 0.0,
             'CELL_DIAMETER': 0.0,
             'USE_GPU': False,
             'SIMPLIFY_CONTOURS': True
@@ -184,6 +190,9 @@ class CellSegmentationTracker:
                 # Run jython script
                 self.__run_jython_script()
 
+                # Reinclude flow_threshold and cellprob in cellpose dict 
+                self.cellpose_dict.update({'FLOW_THRESHOLD': self.flow_threshold, 'CELLPROB_THRESHOLD': self.cellprob_threshold})
+
                 # Reset flow and cell probability threshold to default values after run
                 np.savetxt(os.path.join(self.__cellpose_folder_path, 'params.txt'), \
                            np.array([0.4, 0.0]))
@@ -191,7 +200,7 @@ class CellSegmentationTracker:
             # Set xml path to image path
             self.xml_path = self.img_path.strip(".tif") + ".xml"
 
-        self.csv = trackmate_xml_to_csv(self.xml_path, get_tracks = True)
+        self.spots_csv, self.tracks_csv = trackmate_xml_to_csv(self.xml_path, get_track_features = True, get_edge_features = False)
 
 
     #### Private methods ####
@@ -265,8 +274,10 @@ class CellSegmentationTracker:
         # Specify Cellpose and TrackMate parameters not set by user
         if self.cellpose_dict == {}:
             self.cellpose_dict = self.cellpose_default_values
+            del self.cellpose_dict['FLOW_THRESHOLD']
+            del self.cellpose_dict['CELLPROB_THRESHOLD']
         else:
-            for key in self.cellpose_default_values.keys():
+            for key in set(self.cellpose_default_values) - set(['FLOW_THRESHOLD', 'CELLPROB_THRESHOLD']):
                 if key not in self.cellpose_dict.keys():
                     self.cellpose_dict[key] = self.cellpose_default_values[key]
         if self.trackmate_dict == {}:
@@ -319,13 +330,36 @@ class CellSegmentationTracker:
 
     #### Public methods ####
 
-    def save_csv(self, name = 'TrackMate.csv'):
-        path_out = os.path.join(self.output_folder, name)
-        self.csv.to_csv(path_out, sep = ',') 
-        print("Saved csv file to: ", path_out)
+    def save_csv(self, name = 'TrackMate', save_tracks = True):
+        path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
+        self.spots_csv.to_csv(path_out_spots, sep = ',') 
+        print("Saved spots csv file to: ", path_out_spots)
+        if save_tracks:
+            path_out_tracks = os.path.join(self.output_folder, name + '_tracks.csv')
+            self.tracks_csv.to_csv(path_out_tracks, sep = ',') 
+            print("Saved tracks csv file to: ", path_out_tracks)
         return
 
-        
+    def print_settings(self):
+        root = et.fromstring(open(self.xml_path).read())
+
+        im_settings = root.find('Settings').find('ImageData')
+        basic_settings = root.find('Settings').find('BasicSettings')
+
+        im_settings_list = ['filename', 'folder', 'width', 'height', 'nslices', 'nframes', 'pixelwidth', 'pixelheight', 'voxeldepth','timeinterval']
+        basic_settings_list = ['xstart', 'xend', 'ystart', 'yend', 'zstart', 'zend', 'tstart', 'tend']
+        settings = [im_settings_list, basic_settings_list]
+
+        print_list = []
+        for i, obj in enumerate([im_settings, basic_settings]):
+            settings_list = settings[i]      
+            for  s in settings_list:
+                print_list.append(s + f': {obj.get(s)}') 
+        print("\nImage information: ", print_list)
+        print("Cellpose settings: ", self.cellpose_dict)
+        print("Trackmate settings: ", self.trackmate_dict, "\n")
+        return
+
 
 def main():
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
@@ -335,21 +369,26 @@ def main():
     cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
-    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged0.tif"
+    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
     show_output = True
-    cellpose_dict = {'USE_GPU': True, 'FLOW_THRESHOLD': 10, 'CELLPROB_THRESHOLD': -5}
+    cellpose_dict = {'USE_GPU': True, 'FLOW_THRESHOLD': .4, 'CELLPROB_THRESHOLD': 0, 'CELL_DIAMETER': 30.0}
 
     # xml_path, outfolder, use_model = cyto2,nuclei, 
     xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
-
+   # xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
+    output_directory = os.getcwd()
     path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
     new_path = path.strip(".tif") + "_resized.tif"
     np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, np,
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='NUCLEI')
+    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI500')
+
+    print(cst.tracks_csv.info())
+    print(cst.tracks_csv.head())
 
     cst.save_csv()
+    cst.print_settings()
     print("you made it bro")
 
 if __name__ == '__main__':
