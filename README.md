@@ -12,7 +12,7 @@
 <h3 align="center">CellSegmentationTracker</h3>
 
   <p align="center">
-    A package intended to make cell segmentation, tracking and subsequent (mostly biophysical) statisticial analysis easy
+    A Python package intended to make cell segmentation, tracking and subsequent (mostly biophysical) statisticial analysis easy
     <br />
     <br />
     <a href="https://github.com/simonguld/CellSegmentationTracker.git">Report Bug</a>
