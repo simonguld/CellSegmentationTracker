@@ -94,7 +94,13 @@ To get a local copy up and running follow these simple example steps.
 
 <!-- USAGE -->
 ## Usage and Limitations
-* how to import
+
+### Importing the class
+CellSegmentationTracker can be imported as follows:
+```
+from cellsegmentationtracker import CellSegmentationTracker
+```
+
 * documentation + link
 * example_notebook
 * images must be tif
@@ -109,16 +115,58 @@ To get a local copy up and running follow these simple example steps.
 
 <!-- PRETRAINED MODELS -->
 ## Pretrained Models
+The pretrained Cellpose models 'CYTO', 'CYTO2' and 'NUCLEI' are of course available when choosing a segmentation model. The user can choose between an additional three models: 'EPI500', 'EPI2500' and 'EPI6000', which have been created by tranfer learning of the Cellpose models, i.e. by training them on specific cell image types (and resolutions) to improve performance on these types of data. The name EPI stems from the fact that all models have been trained on epithelial cells, and the subsequent number indicates the approximate number of cells in an image. 
+
+If none of the pretrained models suit your needs, you can train your own model using the Cellpose GUI.
+
+### EPI 500:
+_Example Image_
+<br />
+<div align="center">  <a href="https://github.com/github_username/repo_name">
+    <img src="images/EPI500.png" width="480" height="480">
+  </a>
+</div>
+
+* Trained on images of a monolayer of epithelial cells with roughly 500 cells per image
+* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* Images created using [...which kind?] spectroscopy
+* Resolution: ??
+* Image size: 2560x2150
+* Default cell diameter for this model:
+
+### EPI 2500:
+_Example Image_
+<br />
+<div align="center">  <a href="https://github.com/github_username/repo_name">
+    <img src="images/EPI500.png" width="480" height="480">
+  </a>
+</div>
+
+* Trained on images of a monolayer of epithelial cells with roughly 2500 cells per image
+* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* Images created using [...which kind?] spectroscopy
+* Resolution: ??
+* Image size: 2005x1567
+* Default cell diameter for this model:
+
+### EPI 6000:
+_Example Image_
+<br />
+<div align="center">  <a href="https://github.com/github_username/repo_name">
+    <img src="images/EPI500.png" width="480" height="480">
+  </a>
+</div>
+
+* Trained on images of a monolayer of epithelial cells with roughly 6000 cells per image
+* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* Images created using [...which kind?] spectroscopy
+* Resolution: ??
+* Image size: 2005x1567
+* Default cell diameter for this model: 
 
 
 <!-- DOCUMENTATION -->
 ## Documentation
-
-### Importing the class
-CellSegmentationTracker can be imported as follows:
-```
-from cellsegmentationtracker import CellSegmentationTracker
-```
 
 ### Class definition
 
