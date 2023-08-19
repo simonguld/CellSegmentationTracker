@@ -120,12 +120,16 @@ _Example Image_
   </a>
 </div>
 
+* Trained using the Cellpose model 'CYTO2' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 500 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2560x2150
-* Default cell diameter for this model:
+* Default paramters for this model:
+    * FLOW_THRESHOLD = 0.4
+    * CELLPROB_THRESHOLD = 0.5
+    * CELL_DIAMETER = 88.7 pixels
 
 ### EPI 2500:
 _Example Image_
@@ -135,13 +139,17 @@ _Example Image_
   </a>
 </div>
 
+* Trained using the Cellpose model 'CYTO' as starting point
 * Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
 * The bright white spots indicate an absence of cells and are not to be segmented
 * It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2005x1567
-* Default cell diameter for this model: 37.79 pixels
+* Default paramters for this model:
+    * FLOW_THRESHOLD = 0.6
+    * CELLPROB_THRESHOLD = - 1.0
+    * CELL_DIAMETER = 37.79 pixels
 
 ### EPI 6000:
 _Example Image_
@@ -151,13 +159,16 @@ _Example Image_
   </a>
 </div>
 
+* Trained using the Cellpose model '....' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 6000 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2005x1567
-* Default cell diameter for this model: 
-
+* Default paramters for this model:
+    * FLOW_THRESHOLD = ..
+    * CELLPROB_THRESHOLD = ..
+    * CELL_DIAMETER = .. pixels
 
 <!-- DOCUMENTATION -->
 ## Documentation
