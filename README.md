@@ -6,7 +6,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/github_username/repo_name">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
+    <img src="images/logo.png" alt="Logo" width="160" height="160">
   </a>
 
 <h3 align="center">CellSegmentationTracker</h3>
@@ -29,10 +29,6 @@
   <ol>
     <li>
       <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
     <li>
       <a href="#getting-started">Getting Started</a>
       <ul>
@@ -40,7 +36,11 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
+    <li><a href="#usage">Usage and Limitations</a></li>
+    <ul>
+        <li><a href="#usage">Usage</a></li>
+        <li><a href="#limitations">Limitations</a></li>
+      </ul>
     <li><a href="#pretrained-models">Pretrained Models</a></li>
     <li><a href="#documentation">Documentation</a></li>
     <li><a href="#contributing">Contributing</a></li>
@@ -89,7 +89,7 @@ THis cool package can do things like ..... + mod cellpose such that flow_thresho
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-<!-- USAGE -->
+<!-- USAGE AND LIMITATIONS -->
 ## Usage and Limitations
 
 ### Usage
@@ -122,7 +122,7 @@ _Example Image_
 
 * Trained using the Cellpose model 'CYTO2' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 500 cells per image
-* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2560x2150
@@ -142,7 +142,7 @@ _Example Image_
 * Trained using the Cellpose model 'CYTO' as starting point
 * Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
 * The bright white spots indicate an absence of cells and are not to be segmented
-* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2005x1567
@@ -161,7 +161,7 @@ _Example Image_
 
 * Trained using the Cellpose model '....' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 6000 cells per image
-* It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
+* It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2005x1567
