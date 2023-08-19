@@ -97,7 +97,7 @@ All functionality is contained in the class CellSegmentationTracker, which can b
 ```
 from cellsegmentationtracker import CellSegmentationTracker
 ```
-To read about the parameters, attributes and methods of CellSegmentationTracker, go to <a align="left"><a href="#documentation">Documentation</a></a>. To see an example of how to use this package and its methods, take a look at the <a align="left"><a href="https://github.com/simonguld/CellSegmentationTracker/example_notebook.ipynb">example notebook</a></a>.
+To read about the parameters, attributes and methods of CellSegmentationTracker, go to <a align="left"><a href="#documentation">Documentation</a></a>. To see an example of how to use this package and its methods, take a look at the <a align="left"><a href="https://github.com/simonguld/CellSegmentationTracker/blob/main/example_notebook.ipynb">example notebook</a></a>.
 
 ### Limitations
   - As of now, only .tif files are supported as input images
