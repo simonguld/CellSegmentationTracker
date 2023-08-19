@@ -65,11 +65,8 @@ THis cool package can do things like ..... + mod cellpose such that flow_thresho
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
 ### Prerequisites
-* Python 3.9 (possibly 3.8 and/or 3.10 will work as well)
+* Python 3.9 
 * Java 8
 * Jython 2.7
 * Fiji 2.9, and the TrackMate-Cellpose extension
@@ -79,7 +76,7 @@ To get a local copy up and running follow these simple example steps.
 ### Installation
 
 1. Download and unpack the newest version of Fiji. Follow the instructions on https://imagej.net/software/fiji/downloads.
-2. (??) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
+2. (Is this step already satified when downloading Fiji???) Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
 3. Download and install Jython. Follow the instructions on https://www.jython.org/installation.html
 4. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
 5. Create an Anaconda virtual environment using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
@@ -95,21 +92,17 @@ To get a local copy up and running follow these simple example steps.
 <!-- USAGE -->
 ## Usage and Limitations
 
-### Importing the class
-CellSegmentationTracker can be imported as follows:
+### Usage
+All functionality is contained in the class CellSegmentationTracker, which can be imported as follows:
 ```
 from cellsegmentationtracker import CellSegmentationTracker
 ```
+To read about the parameters, attributes and methods of CellSegmentationTracker, go to <a align="left"><a href="#documentation">Documentation</a></a>. To see an example of how to use this package and its methods, take a look at the <a align="left"><a href="https://github.com/simonguld/CellSegmentationTracker/example_notebook.ipynb">example notebook</a></a>.
 
-* documentation + link
-* example_notebook
-* images must be tif
-* limitations
-  - poss. anaconda but at least the format venv/lib/site-packages/cellpose,
-  - trained on greyscale,
-  - 2D
-  - LAPTracker
-  - (Probably??) only single-chanlled images
+### Limitations
+  - As of now, only .tif files are supported as input images
+  - As of now, multichanneled images are not supported
+  - As of now, it is not possible to choose Trackmate tracker. The LAP tracker is used in all cases (see https://imagej.net/plugins/trackmate/trackers/lap-trackers for more information)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
