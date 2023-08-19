@@ -131,16 +131,17 @@ _Example Image_
 _Example Image_
 <br />
 <div align="center">  <a href="https://github.com/github_username/repo_name">
-    <img src="images/EPI500.png" width="480" height="480">
+    <img src="images/EPI2500.png" width="480" height="480">
   </a>
 </div>
 
-* Trained on images of a monolayer of epithelial cells with roughly 2500 cells per image
+* Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
+* The bright white spots indicate an absence of cells and are not to be segmented
 * It has been trained so as not not segment cells at the image boundary (to avoid half-segmentations)
 * Images created using [...which kind?] spectroscopy
 * Resolution: ??
 * Image size: 2005x1567
-* Default cell diameter for this model:
+* Default cell diameter for this model: 37.79 pixels
 
 ### EPI 6000:
 _Example Image_
