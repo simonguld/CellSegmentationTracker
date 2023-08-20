@@ -93,6 +93,14 @@ THis cool package can do things like ..... + mod cellpose such that flow_thresho
 ## Usage and Limitations
 
 ### Usage
+
+DEVELOPER NOTES:
+.... der er ligesom 3 dele: 1) kør, 2) gen. csv-filer inkl hastigheder, 3) postanalyse. 
+Man behøver ikke bruge alle dele. man kan køre trackmate selv (fx hvis man har brug for filtre) og så bare fodre pakken her med xml-filen.
+Man kan også nøjes med bare at bruge pakken til at gen. de er csv-filer og så lade det være det
+
+
+
 All functionality is contained in the class CellSegmentationTracker, which can be imported as follows:
 ```
 from cellsegmentationtracker import CellSegmentationTracker
@@ -103,6 +111,7 @@ To read about the parameters, attributes and methods of CellSegmentationTracker,
   - As of now, only .tif files are supported as input images
   - As of now, multichanneled images are not supported
   - As of now, it is not possible to choose Trackmate tracker. The LAP tracker is used in all cases (see https://imagej.net/plugins/trackmate/trackers/lap-trackers for more information)
+  - As of now, it is not possible to apply tracking filters. Instead, the idea is use / train a cell segmentation model that is sufficiently specialized to a given data set such that filtering is unnecessary. For more details on this, see <a align="left"><a href="#pretrained-models">Pretrained Models</a></a> below.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -110,7 +119,7 @@ To read about the parameters, attributes and methods of CellSegmentationTracker,
 ## Pretrained Models
 The pretrained Cellpose models 'CYTO', 'CYTO2' and 'NUCLEI' are of course available when choosing a segmentation model. The user can choose between an additional three models: 'EPI500', 'EPI2500' and 'EPI6000', which have been created by tranfer learning of the Cellpose models, i.e. by training them on specific cell image types (and resolutions) to improve performance on these types of data. The name EPI stems from the fact that all models have been trained on epithelial cells, and the subsequent number indicates the approximate number of cells in an image. 
 
-If none of the pretrained models suit your needs, you can train your own model using the Cellpose GUI.
+If none of the pretrained models suit your needs, you can train your own model using the Cellpose GUI - it is easy and can be done rather quickly.
 
 ### EPI 500:
 _Example Image_
