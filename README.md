@@ -111,7 +111,7 @@ To read about the parameters, attributes and methods of CellSegmentationTracker,
   - As of now, only .tif files are supported as input images
   - As of now, multichanneled images are not supported
   - As of now, it is not possible to choose Trackmate tracker. The LAP tracker is used in all cases (see https://imagej.net/plugins/trackmate/trackers/lap-trackers for more information)
-  - As of now, it is not possible to apply tracking filters. Instead, the idea is use / train a cell segmentation model that is sufficiently specialized to a given data set such that filtering is unnecessary. For more details on this, see <a align="left"><a href="#pretrained-models">Pretrained Models</a></a> below.
+  - As of now, it is not possible to apply tracking filters. Instead, the idea is use a cell segmentation model that is sufficiently specialized to a given data set such that filtering is unnecessary. For more details on this, see <a align="left"><a href="#pretrained-models">Pretrained Models</a></a> below.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
