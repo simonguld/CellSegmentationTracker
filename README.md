@@ -133,7 +133,7 @@ _Example Image_
 * Trained on images of a monolayer of epithelial cells with roughly 500 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
 * Images created using flourescence microscopy (5 min. between frames)
-* Magnification: 10x
+* Magnification: 40x
 * Image size: 2560x2150 (416x351 microns)
 * Default paramters for this model:
     * FLOW_THRESHOLD = 0.4
