@@ -132,9 +132,9 @@ _Example Image_
 * Trained using the Cellpose model 'CYTO2' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 500 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
-* Images created using [...which kind?] spectroscopy
-* Resolution: ??
-* Image size: 2560x2150
+* Images created using flourescence microscopy (5 min. between frames)
+* Magnification: 10x
+* Image size: 2560x2150 (416x351 microns)
 * Default paramters for this model:
     * FLOW_THRESHOLD = 0.4
     * CELLPROB_THRESHOLD = 0.5
@@ -152,9 +152,9 @@ _Example Image_
 * Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
 * The bright white spots indicate an absence of cells and are not to be segmented
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
-* Images created using [...which kind?] spectroscopy
-* Resolution: ??
-* Image size: 2005x1567
+* Images created using light microscopy (10 min.between frames)
+* Magnification: 
+* Image size: 2005x1567 (1303.25x1018.55 microns)
 * Default paramters for this model:
     * FLOW_THRESHOLD = 0.6
     * CELLPROB_THRESHOLD = - 1.0
@@ -171,13 +171,13 @@ _Example Image_
 * Trained using the Cellpose model '....' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 6000 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
-* Images created using [...which kind?] spectroscopy
-* Resolution: ??
-* Image size: 2005x1567
+* Images created using light microscopy (187 seconds between frames
+* Resolution: 10x
+* Image size: 2560x2160 (1664x1404 microns)
 * Default paramters for this model:
     * FLOW_THRESHOLD = ..
     * CELLPROB_THRESHOLD = ..
-    * CELL_DIAMETER = .. pixels
+    * CELL_DIAMETER = .. 30.58 pixels
 
 <!-- DOCUMENTATION -->
 ## Documentation
