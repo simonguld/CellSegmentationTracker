@@ -52,13 +52,12 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # skriv valll tas
 
 
-
-
-## FOR LATER:
 # TODO:
-# grundig gennemlæsning af class for at checke efter fejl + relevante tests
+# input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
+#NBNBN: does trackmate actually do that automatically? 
 
 
+# allow for user providing csvs????
 # SPEND A LITTLE TIME ON:
 # make show_tracks opt?
 # fix cellmask color if possible(se på features/featureutils.java)
@@ -73,7 +72,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # finish readme and example notebook
 # make sure the package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
 
-## if running full size img are super slow, consider implementing resize after all
 
 ## NONESSENTIAL (IF TIME)
 # include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
@@ -93,11 +91,11 @@ class CellSegmentationTracker:
     def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
                   use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict()):
 
+        self.imagej_filepath = imagej_filepath
+        self.cellpose_python_filepath = cellpose_python_filepath
         self.img_folder = image_folder_path
         self.img_path = None
-        self.xml_path = xml_path
-        self.imagej_filepath = imagej_filepath
-        self.cellpose_python_filepath = cellpose_python_filepath   
+        self.xml_path = xml_path     
         self.custom_model_path = custom_model_path
         self.__current_path = os.getcwd()
         self.__parent_dir = os.path.abspath(os.path.join(self.__current_path, os.pardir))
@@ -109,14 +107,14 @@ class CellSegmentationTracker:
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
                                         os.path.join(self.__parent_dir, 'models', 'epi500'), \
-                                        os.path.join(self.__parent_dir, 'models', 'epi2500')]
+                                        os.path.join(self.__parent_dir, 'models', 'epi2500'), \
+                                            os.path.join(self.__parent_dir, 'models', 'epi6000')]
         else:
             self.__cellpose_folder_path = None
             self.pretrained_models_paths = None
         
-        # Set output folder path to image folder path, if not provided
-        self.output_folder = output_folder_path
-        if self.output_folder is None:
+        # Set output folder path to image folder path, if not provided, and to current path if image folder path is not provided
+        if output_folder_path is None:
             if self.img_folder is not None:
                 self.output_folder = self.img_folder if os.path.isdir(self.img_folder) else os.path.dirname(self.img_folder)
             else:
@@ -136,7 +134,7 @@ class CellSegmentationTracker:
         self.tracks_df = None
         self.edges_df = None
 
-        self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500']
+        self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500', 'EPI6000']
 
         self.cellpose_default_values = {
             'TARGET_CHANNEL' : 0,
@@ -386,7 +384,7 @@ class CellSegmentationTracker:
         """
         if self.xml_path is not None:
             print("Starting to generate csv files from xml file now. This may take a while... \
-                  \nAn XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular labtop.")
+                  \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular labtop.")
                   
 
             self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
