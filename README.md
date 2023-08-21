@@ -152,7 +152,7 @@ _Example Image_
 * Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
 * The bright white spots indicate an absence of cells and are not to be segmented
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
-* Images created using light microscopy (10 min.between frames)
+* Images created using light microscopy (10 min. between frames)
 * Magnification: 
 * Image size: 2005x1567 (1303.25x1018.55 microns)
 * Default paramters for this model:
@@ -168,10 +168,10 @@ _Example Image_
   </a>
 </div>
 
-* Trained using the Cellpose model '....' as starting point
+* Trained using the Cellpose model 'CYTO2' as starting point
 * Trained on images of a monolayer of epithelial cells with roughly 6000 cells per image
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
-* Images created using light microscopy (187 seconds between frames
+* Images created using light microscopy (187 seconds between frames)
 * Resolution: 10x
 * Image size: 2560x2160 (1664x1404 microns)
 * Default paramters for this model:
