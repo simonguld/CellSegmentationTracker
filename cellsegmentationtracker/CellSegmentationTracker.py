@@ -44,38 +44,47 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 ##TODO:
 
 ##ESSENTIAL (DO FIRST)
+# pixels --> physical if provided. ALSP
+
+# -1) fix the current path stuff. We cant have stuff being output the the class folder
+# 0) opt params ift epi6000
+# 1) TEST: Prøv modeller af på de forskellige datasæt. virker DET?
+# 2) Impl. grid analysis, incl saving and plotting
+# 3) Impl. density fluctuations
+# 4) Impl. summary stats
+# 5) Impl. plotting against time
+# 6) Documents methods, attributes, class in readme and script
+# 7) Finish README
+# 8) Finish example notebook (possibly: allow for im_path to be hyperlink)
+# 9) Make sure package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
 
 
-# Træn sidste model + afslut doku
-# TEST: Prøv modeller af på de forskellige datasæt. virker DET?
-# gem billeder af dårlige segmenteringer 
-# skriv valll tas
-
-
-# TODO:
+# EFTER SEND-OFF:
+### HANDLING UNITS:
 # input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
-#NBNBN: does trackmate actually do that automatically? 
+# CHECK XML TO see if time and lengths are provided. otherwise print info message
+# ALSO possbily allow entering physical units
+# NBNBNB: Velocities depend on it!
 
-
+### ATTRIBUTES
 # allow for user providing csvs????
+# make a print all features method
+# possibly extend grid analysis to include all features
+
+### VISUALIZATION
 # SPEND A LITTLE TIME ON:
 # make show_tracks opt?
 # fix cellmask color if possible(se på features/featureutils.java)
 
-
+### RUN-SPPED
 # CONSIDER:
-# make imp. faster by 1) not loading all features to csv and/or 2) not calculating everything in trackmate 3) resizing
-
-# BEFORE SENDING TO VALERIIA:
-# add docstring to class
-# document methods(should csv_dfs be methods? Otherwise throw them in as attributes)
-# finish readme and example notebook
-# make sure the package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
+# not loading all features to csv
+#  2) not calculating everything in trackmate 
+# 3) resizing input 
 
 
 ## NONESSENTIAL (IF TIME)
 # include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
-# include option to give pixel=length, frame=time 
 # train nuclei data. NB: 1 bad img
 # make naming of xml and csv files more flexible
 # make roubst under other image formats?
@@ -244,6 +253,12 @@ class CellSegmentationTracker:
 
         self.jython_dict.update({'CELLPOSE_DICT': self.cellpose_dict})
         self.jython_dict.update({'TRACKMATE_DICT': self.trackmate_dict}) 
+
+        # Warn user about track merging and splitting
+        if self.trackmate_dict['ALLOW_TRACK_MERGING'] or self.trackmate_dict['ALLOW_TRACK_SPLITTING']:
+            print("\nWARNING: Track merging and/or splitting has been allowed. This may result in inconsistent velocities, \
+                  as more spots belonging to the same track can be present at the same time\n")
+
         return
 
     def __run_jython_script(self):
@@ -370,11 +385,6 @@ class CellSegmentationTracker:
             
         # Set xml path to image path
         self.xml_path = self.img_path.strip(".tif") + ".xml"
-
-        # Warn user about track merging and splitting
-        if self.trackmate_dict['ALLOW_TRACK_MERGING'] or self.trackmate_dict['ALLOW_TRACK_SPLITTING']:
-            print("\nWARNING: Track merging and/or splitting has been allowed. This may result in inconsistent velocities, \
-                  as more spots belonging to the same track can be present at the same time\n")
         return
 
     def generate_csv_files(self, calculate_velocities = True, get_tracks = True, get_edges = True, save_csv_files = True, name = None):
@@ -383,8 +393,8 @@ class CellSegmentationTracker:
 
         """
         if self.xml_path is not None:
-            print("Starting to generate csv files from xml file now. This may take a while... \
-                  \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular labtop.")
+            print("\nStarting to generate csv files from xml file now. This may take a while... \
+                  \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
                   
 
             self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
@@ -468,8 +478,13 @@ def main():
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
     xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split\\merged.xml"
     t1= time.time()
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
+
+    dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
+    image_path = os.path.join(dir_path, 'resources', 'epi500_sample_images.tif')
+
+
+    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, image_path, output_folder_path=output_directory, \
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI500',)
     cst.run_segmentation_tracking()
     t2= time.time()
     
