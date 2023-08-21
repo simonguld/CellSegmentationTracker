@@ -164,7 +164,7 @@ _Example Image_
 _Example Image_
 <br />
 <div align="center">  <a href="https://github.com/github_username/repo_name">
-    <img src="images/EPI500.png" width="480" height="480">
+    <img src="images/EPI6000.png" width="480" height="480">
   </a>
 </div>
 
@@ -175,8 +175,8 @@ _Example Image_
 * Resolution: 10x
 * Image size: 2560x2160 (1664x1404 microns)
 * Default paramters for this model:
-    * FLOW_THRESHOLD = ..
-    * CELLPROB_THRESHOLD = ..
+    * FLOW_THRESHOLD = 0.5
+    * CELLPROB_THRESHOLD = 0.0
     * CELL_DIAMETER = .. 30.58 pixels
 
 <!-- DOCUMENTATION -->
