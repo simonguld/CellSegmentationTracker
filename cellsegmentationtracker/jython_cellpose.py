@@ -39,7 +39,6 @@ with open(file_path, 'r') as file:
 # Load paths from settings file.
 image_path = param_dict['IMG_PATH']
 cellpose_python_filepath = param_dict['CELLPOSE_PYTHON_FILEPATH']
-model_directory = param_dict['CUSTOM_MODEL_PATH']
 output_path = param_dict['OUTPUT_PATH']
 
 cellpose_dict = param_dict['CELLPOSE_DICT']

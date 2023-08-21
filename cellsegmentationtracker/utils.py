@@ -63,6 +63,7 @@ def get_target_dimensions(im_path, division_factor = 1):
             target_width, target_height = int(img.width / division_factor) , int(img.height / division_factor)
         else:
             target_width, target_height = int(img.height / division_factor) , int(img.shape[2] / division_factor)
+    img.close()
     return target_width, target_height
 
 def resize_imlist(im_dir, target_width, target_height, output_dir = None):
@@ -79,6 +80,7 @@ def resize_imlist(im_dir, target_width, target_height, output_dir = None):
         im = Image.open(f).resize((target_width,target_height))
         file_name = f"im{i}"
         im.save(os.path.join(output_dir , f"{file_name}.tif"))
+        im.close()
     return
 
 def resize_tif(im_path, division_factor = 1, Nframes = None):
@@ -114,12 +116,14 @@ def resize_tif(im_path, division_factor = 1, Nframes = None):
         os.rmdir(output_dir + f"_resized_{target_width}x{target_height}")
     return
 
-def split_tiff(im_path):
+def split_tiff(im_path, name = None):
     """
     Split a tif file containing multiple frames into multiple tif files
     """
     im_dir = os.path.dirname(im_path)
-    output_dir = im_path.strip(".tif") + f"_split"
+    if name is None:
+        name = f"_split"
+    output_dir = im_path.strip(".tif") + name
     os.mkdir(output_dir)
     # Split tif file
     info = tifftools.read_tiff(im_path)
@@ -127,33 +131,32 @@ def split_tiff(im_path):
         tifftools.write_tiff(ifd, os.path.join(output_dir, f'im{i}.tif'))
     return
 
-def merge_tiff(im_dir, img_out_name, Nframes = None):
-    img_in_names = get_imlist(im_dir, format = '.tif')
-    Nframes = len(img_in_name) if Nframes is None else Nframes
-    if not img_in_names:
+def merge_tiff(im_dir, img_out_path, Nframes = None):
+    im_list = get_imlist(im_dir, format = '.tif')
+    Nframes = len(im_list) if Nframes is None else Nframes
+    if len(im_list) == 0:
         print("No image!!!")
         return -1
-    t = tifftools.read_tiff(img_in_names[0])
+    t = tifftools.read_tiff(im_list[0])
 
-    for img_in_name in img_in_names[1:Nframes]:
+    for img_in_name in im_list[1:Nframes]:
         t["ifds"].extend(tifftools.read_tiff(img_in_name)["ifds"])
 
-    if os.path.isfile(img_out_name):
-        os.unlink(img_out_name)
-    tifftools.write_tiff(t, img_out_name)
+    if os.path.isfile(img_out_path):
+        os.unlink(img_out_path)
+    tifftools.write_tiff(t, img_out_path)
 
-    imgo = imread(img_out_name)
-    imgs = [imread(e) for e in img_in_names]
+    imgo = imread(img_out_path)
+    imgs = [imread(e) for e in im_list]
 
 
-    if len(img_in_names) in (3, 4):  # @TODO:
+    if len(im_list) in (3, 4):  # @TODO:
         imgo = imgo.transpose((2, 0, 1))
 
-    print("Output file details: {:}, {:}".format(imgo.shape, imgo.dtype))
-    print("Input files details: {:}".format([(img.shape, img.dtype) for img in imgs]))
     return
 
-def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_track_features=False, get_edge_features=False):
+def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, calculate_velocities = True,\
+                          get_track_features=False, get_edge_features=False):
     """
     This function is a modification of Hadrien Mary's function from the pytrackmate python package
     ...
@@ -169,22 +172,27 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
         Add tracks to label
     """
 
+    df_spots = None
+    df_tracks = None
+    df_edges = None
+
     root = et.fromstring(open(trackmate_xml_path).read())
 
-    objects = []
     minimal_labels = {'FRAME': 'Frame',
-                      'ID': 'Spot ID',}
+                    'ID': 'Spot ID',
+                    'POSITION_X': 'X',
+                    'POSITION_Y': 'Y',}
     object_labels = {'FRAME': 'Frame',
-                     'POSITION_T': 'T',
-                     'POSITION_X': 'X',
-                     'POSITION_Y': 'Y',
-                     'POSITION_Z': 'Z',
-                     'RADIUS': 'Radius',
-                     'VISIBILITY': 'Visibility',
-                     'MANUAL_SPOT_COLOR': 'Manual spot color',
-                     'ELLIPSE_X0': 'Ellipse center x0',
+                    'POSITION_T': 'T',
+                    'POSITION_X': 'X',
+                    'POSITION_Y': 'Y',
+                    'POSITION_Z': 'Z',
+                    'RADIUS': 'Radius',
+                    'VISIBILITY': 'Visibility',
+                    'MANUAL_SPOT_COLOR': 'Manual spot color',
+                    'ELLIPSE_X0': 'Ellipse center x0',
                         'ELLIPSE_Y0': 'Ellipse center y0',
-                     'ELLIPSE_MINOR': 'Ellipse short axis',
+                    'ELLIPSE_MINOR': 'Ellipse short axis',
                         'ELLIPSE_MAJOR': 'Ellipse long axis',
                         'ELLIPSE_THETA': 'Ellipse angle',
                         'ELLIPSE_ASPECTRATIO': 'Ellipse aspect ratio',
@@ -193,23 +201,23 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
                         'CIRCULARITY': 'Circularity',
                         'SOLIDITY': 'Solidity',
                         'SHAPE_INDEX': 'Shape index',
-                     'QUALITY': 'Quality',      
-                     'MEAN_INTENSITY_CH1': 'Mean intensity ch1',
-                     'MEDIAN_INTENSITY_CH1': 'Median intensity ch1',
-                     'MIN_INTENSITY_CH1': 'Min intensity ch1',
-                     'MAX_INTENSITY_CH1': 'Max intensity ch1',
-                     'TOTAL_INTENSITY_CH1': 'Sum intensity ch1',
+                    'QUALITY': 'Quality',      
+                    'MEAN_INTENSITY_CH1': 'Mean intensity ch1',
+                    'MEDIAN_INTENSITY_CH1': 'Median intensity ch1',
+                    'MIN_INTENSITY_CH1': 'Min intensity ch1',
+                    'MAX_INTENSITY_CH1': 'Max intensity ch1',
+                    'TOTAL_INTENSITY_CH1': 'Sum intensity ch1',
                     'STD_INTENSITY_CH1': 'Std intensity ch1',
                     'CONTRAST_CH1': 'Contrast ch1',
                     'SNR_CH1': 'Signal/Noise ratio ch1',
                     'ID': 'Spot ID',
                     }
     
-    # Include only features in include_features_list
-    if include_features_list is not None:
+    # Include only features in include_spot_features_list
+    if include_spot_features_list is not None:
         del_list = []
         for el in object_labels.keys():
-            if object_labels[el] not in include_features_list:
+            if object_labels[el] not in include_spot_features_list:
                 del_list.append(el)
         for el in del_list:
             del object_labels[el]
@@ -219,25 +227,24 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
     spot_features = [c.get('feature') for c in list(spot_features)] + ['ID']
 
     spots = root.find('Model').find('AllSpots')
-    df_spots = pd.DataFrame([])
-    objects = []
+    spot_objects = []
     for frame in spots.findall('SpotsInFrame'):
         for spot in frame.findall('Spot'):
             single_object = []
             for label in spot_features:
                 single_object.append(spot.get(label))
-            objects.append(single_object)
+            spot_objects.append(single_object)
 
-    df_spots = pd.DataFrame(objects, columns=spot_features)
-    df_spots = df_spots.astype(float)
+    df_spots = pd.DataFrame(spot_objects, columns=spot_features).astype('float')
+    
 
     # Apply initial filtering
     initial_filter = root.find("Settings").find("InitialSpotFilter")
 
     df_spots = filter_spots(df_spots,
-                         name=initial_filter.get('feature'),
-                         value=float(initial_filter.get('value')),
-                         isabove=True if initial_filter.get('isabove') == 'true' else False)
+                        name=initial_filter.get('feature'),
+                        value=float(initial_filter.get('value')),
+                        isabove=True if initial_filter.get('isabove') == 'true' else False)
 
     # Apply filters
     spot_filters = root.find("Settings").find("SpotFilterCollection")
@@ -245,13 +252,14 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
     for spot_filter in spot_filters.findall('Filter'):
 
         df_spots = filter_spots(df_spots,
-                             name=spot_filter.get('feature'),
-                             value=float(spot_filter.get('value')),
-                             isabove=True if spot_filter.get('isabove') == 'true' else False)
+                            name=spot_filter.get('feature'),
+                            value=float(spot_filter.get('value')),
+                            isabove=True if spot_filter.get('isabove') == 'true' else False)
 
     df_spots = df_spots.loc[:, object_labels.keys()]
     df_spots.columns = [object_labels[k] for k in object_labels.keys()]
     df_spots['TRACK_ID'] = np.arange(df_spots.shape[0])
+
 
     # Get track IDs
     filtered_track_ids = [int(track.get('TRACK_ID')) for track in root.find('Model').find('FilteredTracks').findall('TrackID')]
@@ -263,16 +271,28 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
 
     if get_track_features:
         track_features = root.find('Model').find('FeatureDeclarations').find('TrackFeatures')
-        track_features = [c.get('feature') for c in list(track_features)]
-  
-    objects = []
+        track_features = [c.get('feature') for c in list(track_features)] 
+        track_objects = []
+    if get_edge_features:
+        edge_features = root.find('Model').find('FeatureDeclarations').find('EdgeFeatures')
+        edge_features = [c.get('feature') for c in list(edge_features)]
+        edge_objects = []
+
+
     for track in tracks.findall('Track'):
         if get_track_features:
             single_object = []
             for feature in track_features:
                 single_object.append(track.get(feature))
-            objects.append(single_object)
+            track_objects.append(single_object)
 
+        if get_edge_features:
+            for edge in track.findall('Edge'):
+                single_object = []
+                for label in edge_features:
+                    single_object.append(edge.get(label))
+                edge_objects.append(single_object)
+            
         track_id = int(track.get("TRACK_ID"))
         if track_id in filtered_track_ids:
 
@@ -287,26 +307,29 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_features_list = None, get_t
     single_track = df_spots.loc[df_spots["TRACK_ID"].isnull()]
     df_spots.loc[df_spots["TRACK_ID"].isnull(), "TRACK_ID"] = label_id + np.arange(0, len(single_track))
 
-    # Extract velocities
-    df_spots['VELOCITY_X'] = np.nan
-    df_spots['VELOCITY_Y'] = np.nan
+    if calculate_velocities:
+        # Extract velocities
+        df_spots['VELOCITY_X'] = np.nan
+        df_spots['VELOCITY_Y'] = np.nan
 
-    for track in np.arange(df_spots['TRACK_ID'].max()):
-        idx = df_spots.index[df_spots['TRACK_ID'] == track]
-        df_spots_res = df_spots.loc[idx].copy()
+        for track in np.arange(df_spots['TRACK_ID'].max()):
+            idx = df_spots.index[df_spots['TRACK_ID'] == track]
+            df_spots_res = df_spots.loc[idx].copy()
 
-        frame_gap = np.hstack([df_spots_res['Frame'].diff().values[1:], df_spots_res['Frame'].diff().values[-1:]])
-        velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / frame_gap
-        velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / frame_gap
+            frame_gap = np.hstack([df_spots_res['Frame'].diff().values[1:], df_spots_res['Frame'].diff().values[-1:]])
+            velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / frame_gap
+            velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / frame_gap
 
-        df_spots['VELOCITY_X'].iloc[idx] = velocity_x
-        df_spots['VELOCITY_Y'].iloc[idx] = velocity_y
+            df_spots['VELOCITY_X'].iloc[idx] = velocity_x
+            df_spots['VELOCITY_Y'].iloc[idx] = velocity_y
 
+
+    if get_edge_features:
+        df_edges = pd.DataFrame(edge_objects, columns=edge_features).astype(float)
     if get_track_features:
-        df_tracks = pd.DataFrame(objects, columns=track_features).astype(float)
-        return df_spots, df_tracks
-    else:
-        return df_spots
+        df_tracks = pd.DataFrame(track_objects, columns=track_features).astype(float)
+
+    return df_spots, df_tracks, df_edges
 
 def filter_spots(spots, name, value, isabove):
     if isabove:
@@ -356,28 +379,32 @@ def print_all_possible_spot_features():
 def main():
     import tifffile
     from PIL import Image
-    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject"
     new_path = path.strip(".tif") + "_resized.tif"
     path2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped.tif"
     path3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data\\im0.tif"
  
 
 
-    dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
-    dir2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\medium_zoom"
-    dir3 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\nuclei"
-    dir4 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\im0"
+    dir = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data\\im0_split"
+    dir2 = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
+    dir3 = os.path.join(path3.strip(".tif") + "_split")
     target_width = 698
     target_height = 648
+    names = ['epi6000.tif', 'epi2500.tif']
+    
+
+    
+    for i, dirr in enumerate([dir2]):
+        im0 = get_imlist(dirr, format = '.tif')[0]
+        target_width, target_height = get_target_dimensions(im0, division_factor = 1)
+        resize_imlist(dirr, target_width, target_height)
+        dirrr = dirr + f"_resized_{target_width}x{target_height}"
+
+        merge_tiff(dirrr, os.path.join(path, f"{names[i]}"), Nframes = 4)
 
 
-    for im_path in [path, path2, path3]:
-        split_tiff(im_path)
-        dir = im_path.strip(".tif") + "_split"
-        split_im_path = get_imlist(dir, format = '.tif')[0]
-        target_width, target_height = get_target_dimensions(split_im_path, division_factor = 3)
-        resize_imlist(dir, target_width, target_height)
-        #split_tiff(im_path)
+            #split_tiff(im_path)
 
         #split_tif(im_path)
 
