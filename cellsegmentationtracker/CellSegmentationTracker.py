@@ -18,11 +18,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import rcParams
 from cycler import cycler
 
-from utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
+from .utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
 
-## Change directory to current one
-dir_path = os.path.dirname(os.path.realpath(__file__))
-os.chdir(dir_path)
 
 ## Set plotting style and print options
 sns.set_theme()
@@ -46,20 +43,29 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 ##ESSENTIAL (DO FIRST)
 # pixels --> physical if provided. ALSP
 
-# -1) fix the current path stuff. We cant have stuff being output the the class folder
-# 0) opt params ift epi6000
+
 # 1) TEST: Prøv modeller af på de forskellige datasæt. virker DET?
+
 # 2) Impl. grid analysis, incl saving and plotting
 # 3) Impl. density fluctuations
+# --> (inkl fix impl.) 
+# -->[allow plotting rel. to av cell number also?]
+# --> allso number density vs denisty
 # 4) Impl. summary stats
 # 5) Impl. plotting against time
+
 # 6) Documents methods, attributes, class in readme and script
 # 7) Finish README
 # 8) Finish example notebook (possibly: allow for im_path to be hyperlink)
 # 9) Make sure package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
+# 10) test it by making new venc
 
 
 # EFTER SEND-OFF:
+
+### METHODS: 
+# MSD and CRMSD
+
 ### HANDLING UNITS:
 # input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
 # CHECK XML TO see if time and lengths are provided. otherwise print info message
@@ -106,8 +112,9 @@ class CellSegmentationTracker:
         self.img_path = None
         self.xml_path = xml_path     
         self.custom_model_path = custom_model_path
-        self.__current_path = os.getcwd()
-        self.__parent_dir = os.path.abspath(os.path.join(self.__current_path, os.pardir))
+        self.__working_dir = os.getcwd()
+        self.__class_path = os.path.dirname(os.path.realpath(__file__))
+        self.__parent_dir = os.path.abspath(os.path.join(self.__class_path, os.pardir))
         self.__fiji_folder_path = os.path.dirname(self.imagej_filepath) if self.imagej_filepath is not None else None
 
         if self.cellpose_python_filepath is not None:
@@ -127,7 +134,7 @@ class CellSegmentationTracker:
             if self.img_folder is not None:
                 self.output_folder = self.img_folder if os.path.isdir(self.img_folder) else os.path.dirname(self.img_folder)
             else:
-                self.output_folder = self.__current_path
+                self.output_folder = self.__working_dir
         else:
             self.output_folder = output_folder_path
 
@@ -270,7 +277,7 @@ class CellSegmentationTracker:
         # Get name of executable
         executable = list(os.path.split(self.imagej_filepath))[-1]
         # Set path to jython script
-        jython_path = os.path.join(self.__current_path, "jython_cellpose.py")
+        jython_path = os.path.join(self.__class_path, "jython_cellpose.py")
 
         if self.show_segmentation:
             try: 
@@ -298,7 +305,7 @@ class CellSegmentationTracker:
             print(pipe.communicate()[0].decode('ascii'))
             
         # Change directory back to current one
-        os.chdir(self.__current_path)    
+        os.chdir(self.__working_dir)    
         return
     
 
@@ -326,6 +333,8 @@ class CellSegmentationTracker:
         except:
             if self.use_model == 'EPI2500':
                 self.flow_threshold = 0.6
+            elif self.use_model == 'EPI6000':
+                self.flow_threshold = 0.5
             else:
                 self.flow_threshold = 0.4
         try:
@@ -370,7 +379,7 @@ class CellSegmentationTracker:
                         np.array([self.flow_threshold, self.cellprob_threshold]))
             
             # Save dictionary to json file
-            with open(os.path.join(self.__current_path,"jython_dict.json"), 'w') as fp:
+            with open(os.path.join(self.__class_path,"jython_dict.json"), 'w') as fp:
                 json.dump(self.jython_dict, fp)
 
             # Run jython script
@@ -410,6 +419,9 @@ class CellSegmentationTracker:
     def save_csv(self, name = None):
         """
         Save csv files to output folder.
+
+        Parameters:
+        -----------
 
         """
         if name is None:

@@ -309,8 +309,8 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
 
     if calculate_velocities:
         # Extract velocities
-        df_spots['VELOCITY_X'] = np.nan
-        df_spots['VELOCITY_Y'] = np.nan
+        df_spots['Velocity_X'] = np.nan
+        df_spots['Velocity_Y'] = np.nan
 
         for track in np.arange(df_spots['TRACK_ID'].max()):
             idx = df_spots.index[df_spots['TRACK_ID'] == track]
@@ -320,8 +320,8 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
             velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / frame_gap
             velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / frame_gap
 
-            df_spots['VELOCITY_X'].iloc[idx] = velocity_x
-            df_spots['VELOCITY_Y'].iloc[idx] = velocity_y
+            df_spots['Velocity_X'].iloc[idx] = velocity_x
+            df_spots['Velocity_Y'].iloc[idx] = velocity_y
 
 
     if get_edge_features:
