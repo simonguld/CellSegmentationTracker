@@ -47,6 +47,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ### MAIN ---------------------------------------------------------------------------------------
 
+
 def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_absolute_cell_counts = False,\
                                save_csv = True, name_path = './grid_statistics'):
     """
@@ -79,7 +80,7 @@ def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_ab
     # Extract relevant data from dataframe as array
     data = dataframe.loc[:, cols].values
 
-    grid_columns = ['Frame', 'T', 'Ngrid','xmin', 'xmax', 'ymin', 'ymax', 'number_density','mean_velocity_X','mean_velocity_Y']
+    grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'number_density','mean_velocity_X','mean_velocity_Y']
     grid_columns.extend(add_to_grid)
 
     # Create empty array to store grid data
@@ -115,22 +116,21 @@ def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_ab
         arr_T = data[data[:, 0] == frame]
         time = arr_T[0, 3]
         Ngrid = 0
-        
-        for x in np.linspace(xmin, xmax - grid_len, Nxgrid):
-            mask = (arr_T[:, 1] >= x) & (arr_T[:, 1] < x + grid_len)
-            arr_X = arr_T[mask]
-      
-            for y in np.linspace(ymin, ymax - grid_len, Nygrid):
-                mask = (arr_X[:, 2] >= y) & (arr_X[:, 2] < y + grid_len)
-                # If no spots in grid, set all values(except for density) to nan
+        for y in np.linspace(ymax - grid_len, ymin, Nygrid):
+            mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + grid_len)
+            arr_Y = arr_T[mask]
+
+            for x in np.linspace(xmin, xmax - grid_len, Nxgrid):
+                mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
+          
                 if mask.sum() == 0:
-                    grid_arr[frame * Nsquares + Ngrid, 0:8] = [frame, time, Ngrid, x, x + grid_len, y, y + grid_len, 0]
-                    grid_arr[frame * Nsquares + Ngrid, 8:] = np.nan * np.zeros(len(grid_columns) - 8)
+                    grid_arr[frame * Nsquares + Ngrid, 0:6] = [frame, time, Ngrid, x + grid_len / 2, y + grid_len / 2, 0]
+                    grid_arr[frame * Nsquares + Ngrid, 6:] = np.nan * np.zeros(len(grid_columns) - 6)
                 else:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", category=RuntimeWarning)
-                        vx = np.nanmean(arr_X[mask, 4])
-                        vy = np.nanmean(arr_X[mask, 5])
+                        vx = np.nanmean(arr_Y[mask, 4])
+                        vy = np.nanmean(arr_Y[mask, 5])
 
                     # If true, return the number of cells in each grid as opposed to the density
                     if return_absolute_cell_counts:
@@ -138,11 +138,12 @@ def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_ab
                     else:
                         denisty = mask.sum() / dA      
 
-                    grid_arr[frame * Nsquares + Ngrid, 0:10] = [frame, time, Ngrid, x, x + grid_len, y, y + grid_len, density, vx, vy]
+                    grid_arr[frame * Nsquares + Ngrid, 0:8] = [frame, time, Ngrid, x + grid_len / 2, \
+                                                               y + grid_len / 2, density, vx, vy]
 
                     # Add additional features to grid (if any)
                     for j, feature in enumerate(add_to_grid):
-                        grid_arr[frame * Nsquares + Ngrid, 10 + j] = np.nanmean(arr_X[mask, 6 + j])
+                        grid_arr[frame * Nsquares + Ngrid, 8 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                 Ngrid += 1
 
@@ -153,31 +154,35 @@ def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_ab
 
     return grid_df
 
-
-# step 2: get it to work for multiple frames
-# step 3: get it to work for vector fields
+# step 3: get it to work vector field
+# s
 
 def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                              save_fig = False, name = 'grid_statistics', show = True):
+                             animate = True, frame_interval = 800, show = True):
     
-
-    grid_columns = ['Frame', 'T', 'Ngrid','xmin', 'xmax', 'ymin', 'ymax', 'number_density','mean_velocity_X','mean_velocity_Y']
-
-    xmin, xmax = grid_dataframe['xmin'].min(), grid_dataframe['xmax'].max()
-    ymin, ymax = grid_dataframe['ymin'].min(), grid_dataframe['ymax'].max()
+    xmin, xmax = grid_dataframe['x_center'].min() , grid_dataframe['x_center'].max()
+    ymin, ymax = grid_dataframe['y_center'].min(), grid_dataframe['y_center'].max()
     vmin, vmax = grid_dataframe[feature].min(), grid_dataframe[feature].max()
     Nsquares = int(np.round(grid_dataframe['Ngrid'].max()) + 1)
     Nframes = int(np.round(grid_dataframe['Frame'].max() + 1)) if frame_range == [0,0] else frame_range[1] - frame_range[0]
     frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
     Lx, Ly = xmax - xmin, ymax - ymin
-    grid_len = grid_dataframe['xmax'].loc[0] - grid_dataframe['xmin'].loc[0]
 
     # Calculate number of grid squares in x and y direction
     if Ly < Lx:
+        y_arr = grid_dataframe['y_center'].diff().values
+        idx = int(np.argwhere(y_arr > 0.5)[0])
+
+        grid_len = grid_dataframe['x_center'].loc[idx + 1] - grid_dataframe['x_center'].loc[0]
+        Lx += grid_len
+        Ly += grid_len
         Nygrid = int(np.round(Ly / grid_len))
         Nxgrid = int(np.round(Nsquares / Nygrid) )
     elif Lx <= Ly:
+        grid_len = grid_dataframe['x_center'].loc[1] - grid_dataframe['x_center'].loc[0]
+        Lx += grid_len
+        Ly += grid_len
         Nxgrid = int(np.round(Lx / grid_len))
         Nygrid = int(np.round(Nsquares / Nxgrid) )
 
@@ -189,46 +194,33 @@ def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_
             warnings.simplefilter("ignore", category=RuntimeWarning)
             arr_T = np.nanmean(arr_T, axis = 0)
         title = title=f'{feature.capitalize()} heatmap averaged over frames {frame_range[0]}:{frame_range[1]}'
-        plotter(0, arr_T, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax,\
+        heatmap_plotter(0, arr_T, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax,\
                  title=title)
-
-
-    #plotter_res = lambda i, frame : plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax)
-    #animate(data, plotter_res, (0,Nframes), inter=800, show=show)
-
-    if 0:
-        arr_T = data[data[:, 0] == 0][:, -1]
-
-        
-
-        # reshape to grid
-        arr_grid = np.flip(arr_T.reshape(Nxgrid, Nygrid).T, axis = 0)
-
-        # plot
-        fig, ax = plt.subplots()
-        xticklabels = np.round(np.linspace(xmin + Lx/10, xmax - Lx/10, 4), 2) 
-        yticklabels = np.round(np.linspace(ymax + Ly/10, ymin - Ly/10, 4), 2)
-        sns.heatmap(arr_grid, cmap = 'viridis'), #xticklabels=xticklabels,\
-                    # yticklabels=yticklabels,)
-        ax.set(xlabel = 'x', ylabel = 'y', title = f'{feature.capitalize()} heatmap')
-        ax.set_xticks(ticks = np.linspace(0.5,Nxgrid-0.5,4), labels=xticklabels)
-        ax.set_yticks(ticks = np.linspace(0.5,Nygrid-0.5,4), labels=yticklabels)
-
+    else:
+        heatmap_plotter_res = lambda i, frame : heatmap_plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax)
+        if animate:
+            animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
+        else:
+            for i in range(frame_range[0], frame_range[1]):
+                frame = data[data[:, 0] == i][:, -1]
+                heatmap_plotter_res(i, frame)
     if show:
         plt.show()
     return
 
-def plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax, title=None):
+
+def heatmap_plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax, title=None):
     """
     Plots a heatmap of the given feature for a given frame.
     """
 
     # reshape to grid
-    arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
+    #arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
+    arr_grid = frame.reshape(Nygrid, Nxgrid)
     Lx, Ly = xmax - xmin, ymax - ymin
 
-    xticklabels = np.round(np.linspace(xmin + Lx / 10, xmax - Lx / 10, 4), 2) 
-    yticklabels = np.round(np.linspace(ymax + Ly / 10, ymin - Ly / 10, 4), 2)
+    xticklabels = np.round(np.linspace(xmin, xmax, 4), 2) 
+    yticklabels = np.round(np.linspace(ymax, ymin, 4), 2)
 
     ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax)
 
@@ -238,7 +230,7 @@ def plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature,
     ax.set_yticks(ticks = np.linspace(0.5,Nygrid-0.5,4), labels=yticklabels)
     return
 
-def animate(arr, fn, rng, inter=200, show=True):
+def animator(arr, fn, rng, animate_wrapper = None, inter=200, show=True):
     """Show a frame-by-frame animation.
 
     Parameters:
@@ -251,17 +243,20 @@ def animate(arr, fn, rng, inter=200, show=True):
     # create the figure
     fig = plt.figure()
 
-    # the local animation function
-    def animate_fn(i):
-        # we want a fresh figure everytime
-        fig.clf()
-        # add subplot, aka axis
-        #ax = fig.add_subplot(111)
-        # load the frame
-        frame = arr[arr[:, 0] == i][:, -1]
-        # call the global function
-        fn(i, frame)
-
+    if animate_wrapper is None:
+        # the local animation function
+        def animate_fn(i):
+            # we want a fresh figure everytime
+            fig.clf()
+            # add subplot, aka axis
+            #ax = fig.add_subplot(111)
+            # load the frame
+            frame = arr[arr[:, 0] == i][:, -1]
+            # call the global function
+            fn(i, frame)
+    else:
+        animate_fn = lambda i: animate_wrapper(i, arr, fig, fn)
+            
     anim = ani.FuncAnimation(fig, animate_fn,
                              frames=np.arange(rng[0], rng[1]),
                              interval=inter, blit=False)
@@ -271,16 +266,115 @@ def animate(arr, fn, rng, inter=200, show=True):
 
     return anim
 
+def plot_velocity_field(grid_dataframe, frame_range = [0,0], calculate_average = False, \
+                                animate = True, frame_interval = 800, show = True):
+    
+
+    xmin, xmax = grid_dataframe['x_center'].min() , grid_dataframe['x_center'].max()
+    ymin, ymax = grid_dataframe['y_center'].min(), grid_dataframe['y_center'].max()
+
+    Nsquares = int(np.round(grid_dataframe['Ngrid'].max()) + 1)
+    Nframes = int(np.round(grid_dataframe['Frame'].max() + 1)) if frame_range == [0,0] else frame_range[1] - frame_range[0]
+    frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
+
+    Lx, Ly = xmax - xmin, ymax - ymin
+
+    # Calculate number of grid squares in x and y direction
+    if Ly < Lx:
+        y_arr = grid_dataframe['y_center'].diff().values
+        idx = int(np.argwhere(y_arr > 0.5)[0])
+
+        grid_len = grid_dataframe['x_center'].loc[idx + 1] - grid_dataframe['x_center'].loc[0]
+        Lx += grid_len
+        Ly += grid_len
+        Nygrid = int(np.round(Ly / grid_len))
+        Nxgrid = int(np.round(Nsquares / Nygrid) )
+    elif Lx <= Ly:
+        grid_len = grid_dataframe['x_center'].loc[1] - grid_dataframe['x_center'].loc[0]
+        Lx += grid_len
+        Ly += grid_len
+        Nxgrid = int(np.round(Lx / grid_len))
+        Nygrid = int(np.round(Nsquares / Nxgrid) )
+
+    data= grid_dataframe.loc[:, ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y']].values
+    x_center = data[:Nsquares, 2].reshape(Nygrid, Nxgrid)
+    y_center = data[:Nsquares, 3].reshape(Nygrid, Nxgrid)
+
+    if calculate_average:
+        arr_vx = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, -2].reshape(Nframes, Nsquares)
+        arr_vy = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, -1].reshape(Nframes, Nsquares)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            arr_vx = np.nanmean(arr_vx, axis = 0).reshape(Nygrid, Nxgrid)
+            arr_vy = np.nanmean(arr_vy, axis = 0).reshape(Nygrid, Nxgrid)
+        velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, \
+                               title=f'Velocity field averaged over frames {frame_range[0]}:{frame_range[1]}')
+        
+    else:
+    
+        if animate:
+            anim_wrapper = lambda i, frame, fig, fn: animate_flow_field(i, x_center, y_center, data, fig, fn, Nxgrid, Nygrid)
+            animator(data, velocity_field_plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
+        else:
+            for i in range(frame_range[0], frame_range[1]):
+                arr_vx = data[data[:, 0] == i][:, -2].reshape(Nygrid, Nxgrid)
+                arr_vy = data[data[:, 0] == i][:, -1].reshape(Nygrid, Nxgrid)
+                velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, i=i)
+    if show:
+        plt.show()
+
+# the local animation function
+def animate_flow_field(i, X, Y, arr, fig, fn, Nx, Ny):
+    # we want a fresh figure everytime
+    fig.clf()
+    # add subplot, aka axis
+    #ax = fig.add_subplot(111)
+    # load the frame
+    arr_vx = arr[arr[:, 0] == i][:, -2].reshape(Ny, Nx)
+    arr_vy = arr[arr[:, 0] == i][:, -1].reshape(Ny, Nx)
+    # call the global function
+    velocity_field_plotter(X, Y, arr_vx, arr_vy, i=i)
+    return
+    
+
+
+
+def velocity_field_plotter(X,Y, VX, VY, i = 0, title = None):
+
+    plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
+    #ax.streamplot(np.unique(x_center), np.unique(y_center), vx, vy, density = 1.5, color = 'black')
+    title = f'Velocity field for frame = {i}' if title is None else title
+    plt.xlabel(xlabel = 'x')
+    plt.ylabel(ylabel = 'y')
+    plt.title(title)
+    return
+
+
 
 def main():
-    df = pd.read_csv('../resources/epi500_sample_images_spots.csv')
-        
-    grid_df = calculate_grid_statistics(df, Ngrid = 15, return_absolute_cell_counts=True, include_features=['Area','Circularity'], save_csv = False,)
-    
+    #df = pd.read_csv('../resources/epi500_sample_images_spots.csv')
+    df = pd.read_csv('../resources/CellSegmentationTracker_spots.csv')
+
+    t1 = time.time()
+    grid_df = calculate_grid_statistics(df, Ngrid = 25, return_absolute_cell_counts=True, include_features=[], save_csv = False,)
+    t2 = time.time()
+
+    print(f'Time elapsed for grid calc: {t2 - t1:.2f} s')
+
+
+    plot_velocity_field(grid_df, frame_range = [0,0], calculate_average = False, \
+                                animate = True, frame_interval = 2000, show = True)
+
+   # print(grid_df.loc[15:])
+
     grid_columns = ['Frame', 'T', 'Ngrid','xmin', 'xmax', 'ymin', 'ymax', 'number_density','mean_velocity_X','mean_velocity_Y']
 
-    visualize_grid_statistics(grid_df, feature = 'mean_area', calculate_average = True, \
-                              save_fig = False, name = 'grid_statistics', show = True)
+
+
+
+   # visualize_grid_statistics(grid_df, feature = 'number_density', calculate_average = False, frame_range=[0,5], \
+    #                          animate=True, frame_interval=2000, show = True)
+ 
 
     if 0:
 
@@ -305,7 +399,7 @@ def main():
         vmin = grid_df[feature].min()
         vmax = grid_df[feature].max()
 
-        def plotter(i, frame):
+        def heatmap_plotter(i, frame):
 
             # reshape to grid
             arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
@@ -316,7 +410,7 @@ def main():
                             yticklabels=yticklabels, vmin=vmin, vmax=vmax)
             ax.set(xlabel = 'x', ylabel = 'y', title = f'{feature.capitalize()} heatmap for frame = {i}')
 
-        animate(grid_df.loc[:, ['T', 'Ngrid', feature]].values, plotter, (0,1), inter=800, show=True)
+        animate(grid_df.loc[:, ['T', 'Ngrid', feature]].values, heatmap_plotter, (0,1), inter=800, show=True)
 
 
     # x_ticks = np.round(np.linspace(xmin, xmax, Nxgrid),2)
