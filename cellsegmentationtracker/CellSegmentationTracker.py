@@ -49,6 +49,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # 1) TEST: Prøv modeller af på de forskellige datasæt. virker DET?
 # 11) compare velocties to trackmate speed
 ## fix.. sample images....
+## LAV DATAGUF TIL NATASCHA
 
 # 2) Impl. grid analysis, incl saving and plotting
 ### document
@@ -73,7 +74,10 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ### METHODS: 
 # MSD and CRMSD
+# Nearest neighbors estimator?
+# Tas' method
 # vorticity???
+# try on nuclei data. works?
 
 ### HANDLING UNITS:
 # input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
@@ -327,6 +331,43 @@ class CellSegmentationTracker:
         os.chdir(self.__working_dir)    
         return
     
+    def __initialize_grid(self, Ngrid):
+        """
+        Initialize grid dictionary.
+        """
+  
+        # Extract relevant data from dataframe as array
+        cols = ['Frame', 'X', 'Y']
+        data = self.spots_df.loc[:, cols].values.astype('float')
+
+        # Create empty array to store grid data
+        self.Nframes = int(data[:,0].max() + 1)
+        
+        self.__grid_dict['xmin'], self.__grid_dict['xmax'] = data[:,1].min(), data[:,1].max()
+        self.__grid_dict['ymin'], self.__grid_dict['ymax'] = data[:,2].min(), data[:,2].max()
+
+        self.__grid_dict['Lx'] = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
+        self.__grid_dict['Ly'] = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+   
+        # Calculate number of grid squares in x and y direction
+        if self.__grid_dict['Lx'] > self.__grid_dict['Ly']:
+            self.__grid_dict['Ny'] = Ngrid
+            self.__grid_dict['Nx'] = int(np.floor(Ngrid * self.__grid_dict['Lx'] / self.__grid_dict['Ly']))
+            self.__grid_dict['grid_len'] = self.__grid_dict['Ly'] / self.__grid_dict['Ny']
+            Residual_x = self.__grid_dict['Lx'] % self.__grid_dict['grid_len']
+            self.__grid_dict['xmin'] = self.__grid_dict['xmin'] + Residual_x / 2
+            self.__grid_dict['xmax'] = self.__grid_dict['xmax'] - Residual_x / 2
+        elif self.__grid_dict['Lx'] <= self.__grid_dict['Ly']:
+            self.__grid_dict['Nx'] = Ngrid
+            self.__grid_dict['Ny'] = int(np.floor(Ngrid * self.__grid_dict['Ly'] / self.__grid_dict['Lx']))
+            self.__grid_dict['grid_len'] = self.__grid_dict['Lx'] / self.__grid_dict['Nx']
+            Residual_y = self.__grid_dict['Ly'] % self.__grid_dict['grid_len']
+            self.__grid_dict['ymin'] = self.__grid_dict['ymin'] + Residual_y / 2
+            self.__grid_dict['ymax'] = self.__grid_dict['ymax'] - Residual_y / 2
+
+        self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
+        return
+    
     def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None):
         """
         Plots a heatmap of the given feature for a given frame.
@@ -350,7 +391,25 @@ class CellSegmentationTracker:
         """
         title = f'Velocity field for frame = {i}' if title is None else title
 
+        print("VX\n")
+        print(VX)
+        print("VY\n")
+        print(VY)
+
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
+        plt.xlabel(xlabel = 'x')
+        plt.ylabel(ylabel = 'y')
+        plt.title(title)
+  
+        return
+
+    def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, title = None):
+        """
+        Plot the velocity streamlines for a given frame.
+        """
+        title = f'Velocity streamlines for frame = {i}' if title is None else title
+
+        plt.streamplot(np.unique(X), np.unique(Y), np.flip(VX, axis = 0), np.flip(VY, axis = 0), density = 1.5, color = 'black', linewidth=1, arrowsize=1)
         plt.xlabel(xlabel = 'x')
         plt.ylabel(ylabel = 'y')
         plt.title(title)
@@ -368,7 +427,7 @@ class CellSegmentationTracker:
         arr_vx = arr[arr[:, 0] == i][:, -2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
         arr_vy = arr[arr[:, 0] == i][:, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
         # call the global function
-        self.__velocity_field_plotter(X, Y, arr_vx, arr_vy, i=i)
+        fn(X, Y, arr_vx, arr_vy, i=i)
         return
         
     def __animator(self, arr, fn, rng, animate_wrapper = None, inter=200, show=True):
@@ -408,7 +467,6 @@ class CellSegmentationTracker:
         return
 
     
-
     #### Public methods ####
 
     def run_segmentation_tracking(self):
@@ -688,32 +746,8 @@ class CellSegmentationTracker:
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
-        # Create empty array to store grid data
-        self.Nframes = int(data[:,0].max() + 1)
-        
-        self.__grid_dict['xmin'], self.__grid_dict['xmax'] = data[:,1].min(), data[:,1].max()
-        self.__grid_dict['ymin'], self.__grid_dict['ymax'] = data[:,2].min(), data[:,2].max()
-
-        self.__grid_dict['Lx'] = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
-        self.__grid_dict['Ly'] = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
-   
-        # Calculate number of grid squares in x and y direction
-        if self.__grid_dict['Lx'] > self.__grid_dict['Ly']:
-            self.__grid_dict['Ny'] = Ngrid
-            self.__grid_dict['Nx'] = int(np.floor(Ngrid * self.__grid_dict['Lx'] / self.__grid_dict['Ly']))
-            self.__grid_dict['grid_len'] = self.__grid_dict['Ly'] / self.__grid_dict['Ny']
-            Residual_x = self.__grid_dict['Lx'] % self.__grid_dict['grid_len']
-            self.__grid_dict['xmin'] = self.__grid_dict['xmin'] + Residual_x / 2
-            self.__grid_dict['xmax'] = self.__grid_dict['xmax'] - Residual_x / 2
-        elif self.__grid_dict['Lx'] <= self.__grid_dict['Ly']:
-            self.__grid_dict['Nx'] = Ngrid
-            self.__grid_dict['Ny'] = int(np.floor(Ngrid * self.__grid_dict['Ly'] / self.__grid_dict['Lx']))
-            self.__grid_dict['grid_len'] = self.__grid_dict['Lx'] / self.__grid_dict['Nx']
-            Residual_y = self.__grid_dict['Ly'] % self.__grid_dict['grid_len']
-            self.__grid_dict['ymin'] = self.__grid_dict['ymin'] + Residual_y / 2
-            self.__grid_dict['ymax'] = self.__grid_dict['ymax'] - Residual_y / 2
-
-        self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
+        # Initialize grid dictionary
+        self.__initialize_grid(Ngrid)
 
         # Initialize grid array
         grid_arr = np.ones([self.Nframes * self.__grid_dict['Nsquares'], len(grid_columns)])
@@ -770,7 +804,8 @@ class CellSegmentationTracker:
         -----------
         feature : (string, default = 'number_density') - feature to visualize. Must be a column of the grid dataframe \
                   generated by the method calculate_grid_statistics.
-        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. If [0,0], all frames are visualized.
+        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
+                      If [0,0], all frames are visualized.
         calculate_average : (bool, default=False) - if True, the average heatmap over the given frame range 
                             is calculated and visualized.
         animate : (bool, default=True) - if True, the heatmap is animated over the given frame range.
@@ -812,14 +847,16 @@ class CellSegmentationTracker:
                 plt.show()
         return
 
-    def plot_velocity_field(self, frame_range = [0,0], calculate_average = False, \
+    def plot_velocity_field(self, mode = 'field', frame_range = [0,0], calculate_average = False, \
                                 animate = True, frame_interval = 1200, show = True):
         """
         Plot or animate the velocity field for a given frame range.
 
         Parameters:
         -----------
-        frame_range : (list of ints, default=[0,0] - range of frames to visualize. If [0,0], all frames are visualized.
+        mode : (string, default = 'field_lines') - mode of visualization. Can be 'field' or 'streamlines'
+        frame_range : (list of ints, default=[0,0] - range of frames to visualize. Left endpoint is included, \
+                      right endpoint is not. If [0,0], all frames are visualized.
         calculate_average : (bool, default=False) - if True, the average velocity field over the given
                             frame range is calculated and visualized.
         animate : (bool, default=True) - if True, the velocity field is animated over the given frame range.
@@ -827,6 +864,14 @@ class CellSegmentationTracker:
         show : (bool, default=True) - if True, the velocity field is shown.
     
         """
+        if mode not in ['field', 'streamlines']:
+            print("\nInvalid mode! Please specify a valid mode: 'field' or 'streamlines'.\n")
+            return
+        elif mode == 'streamlines':
+            plotter = self.__velocity_streamline_plotter
+        else:
+            plotter = self.__velocity_field_plotter
+
     
         Nframes = self.Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
         frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
@@ -837,6 +882,7 @@ class CellSegmentationTracker:
         x_center = data[:self.__grid_dict['Nsquares'], 2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
         y_center = data[:self.__grid_dict['Nsquares'], 3].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
 
+
         if calculate_average:
             arr_vx = data[:, -2].reshape(Nframes, self.__grid_dict['Nsquares'])
             arr_vy = data[:, -1].reshape(Nframes, self.__grid_dict['Nsquares'])
@@ -844,24 +890,108 @@ class CellSegmentationTracker:
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
                 arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-            self.__velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, \
-                                title=f'Velocity field averaged over frames {frame_range[0]}:{frame_range[1]}')         
+            plotter(x_center, y_center, arr_vx, arr_vy, \
+                                title=f'Velocity {mode} averaged over frames {frame_range[0]}:{frame_range[1]}')         
         else:  
             if animate:
-                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, fn,)
-                self.__animator(data, self.__velocity_field_plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
+                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, plotter,)
+                self.__animator(data, plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
             else:
                 for i in range(frame_range[0], frame_range[1]):
                     fig, ax = plt.subplots()
                     arr_vx = data[data[:, 0] == i,-2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
                     arr_vy = data[data[:, 0] == i, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                    self.__velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, i=i)
+                    plotter(x_center, y_center, arr_vx, arr_vy, i=i)
         if show:
             plt.show()
         return
 
+    def get_density_fluctuations(self, Nwindows = 10, Ndof = 1):
+        """
+        Calculate defect density fluctuations for different (circular) window sizes (radii). 
+        This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
+        counting the number of particles within each window, and finally calculating the variance of the 
+        number of particles for each window size. The largest window size is determined by the size of the image,
+        and the smallest window size is determined by the number of windows.
+
+        Parameters:
+        -----------
+        Nwindows: (int, default = 10) - number of windows to calculate defect density for.
+        Ndof: (int, default = 1) - number of degrees of freedom used to calculate variance
+
+        Returns --> (defect_densities, window_sizes): 
+        -------- 
+        defect_densities: array of defect densities for different window sizes
+        window_sizes: array of window sizes
+
+        """
+
+        # Extract relevant data from dataframe as array
+        data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
+
+
+        # Initialize grid dictionary
+        self.__initialize_grid(Ngrid = 8)
+
+        # Intialize array of defect densities
+        defect_densities = np.zeros([self.Nframes, Nwindows])
+
+        # Initalize array of average defect densities
+        av_defect_densities = np.zeros(self.Nframes)
+
+        # Define center point
+        LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
+        LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+        center = np.array([LX/2, LY/2])
+
+        # Calculate the average radius of a spot
+        avg_radius = self.spots_df['Radius'].mean()
+        
+        # Define max. and min. window size
+        if self.__grid_dict['Ny'] <= self.__grid_dict['Nx']:
+            max_window_size = LY / 2 - 2 * avg_radius
+        elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
+            max_window_size = LX / 2 - 2 * avg_radius
+
+        max_window_size = LX / 2 - 1
+        min_window_size = (LX / 2 ) / Nwindows
+
+        # Define window sizes
+        window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
+
+        for frame in np.arange(self.Nframes):
+            # Step 1: Convert list of dictionaries to array of defect positions
+            defect_positions = data[data[:, 0] == frame, 1:]
+
+            # Step 2: Calculate distance of each defect to center
+            distances = np.linalg.norm(defect_positions - center, axis=1)
+
+            # Step 3: Calculate density for each window size
+            for i, window_size in enumerate(window_sizes):
+                # Get defects within window
+                defects_in_window = len(distances[distances < window_size])
+                # Calculate  and store density
+                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
+
+            # Step 4: Calculate average defect density (using a larger window size than max_window_size)
+            defects_in_window = len(distances[distances < max_window_size + avg_radius])
+            av_defect_densities[frame] = defects_in_window / (np.pi * (max_window_size + avg_radius)**2)
+
+        # Calculate fluctuations of defect density
+        density_fluctuations = 1 / (Nwindows - 1) * np.sum((defect_densities - av_defect_densities[:, np.newaxis])**2)
+        return density_fluctuations, window_sizes
+
     
-#ax.streamplot(np.unique(x_center), np.unique(y_center), vx, vy, density = 1.5, color = 'black')
+
+
+
+    ## make it work for one frame
+    # make it work for several (avg over more frames --> av of fluctuations over frames
+    # make opt N or dens.
+    # make opt to average or not?
+
+
+
 
 def main():
     
@@ -886,7 +1016,7 @@ def main():
     np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
     path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
-    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split\\merged.xml"
+    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
     t1= time.time()
     xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi500_sample_images.xml'
 
@@ -894,33 +1024,54 @@ def main():
     image_path = os.path.join(dir_path, 'resources', 'epi500_sample_images.tif')
 
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
-                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI500',)
-   # cst.run_segmentation_tracking()
+    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
+                                  show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
+    cst.run_segmentation_tracking()
     t2= time.time()
-    cst.spots_df = pd.read_csv('./resources/CellSegmentationTracker_spots.csv')
+    print("RUNTIME: ", (t2-t1)/60)
+    cst.generate_csv_files(save_csv_files=True, name='im11')
+   # cst.spots_df = pd.read_csv('./resources/CellSegmentationTracker_spots.csv')
 
-   # print(cst.spots_df.info())
-   # print(cst.spots_df.describe())
+   
+    cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
 
-    grid_df = cst.calculate_grid_statistics(Ngrid = 25, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    print(grid_df.columns)
-
-
-    cst.plot_velocity_field(frame_range = [0,4], calculate_average = False, \
-                                animate = False, frame_interval = 800, show = True)
-
-    cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-   # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
-
-    #cst.plot_feature_over_time('Area')
+    cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,1], calculate_average = False, \
+                                        animate = False, frame_interval = 800, show = True)
 
     if 0:
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [0,1], calculate_average = False, \
+
+        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
+    
+
+
+
+        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
                                     animate = True, frame_interval = 800, show = True)
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [10,11], calculate_average = False, \
+
+
+
+        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
+    
+
+
+
+        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
+                                    animate = False, frame_interval = 800, show = False)
+        
+        cst.plot_velocity_field(mode = 'field', frame_range = [2,4], calculate_average = False, \
+                                    animate = False, frame_interval = 800, show = True)
+
+        cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
+                                        animate = True, frame_interval = 800, show = True)
+
+    # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
+
+        #cst.plot_feature_over_time('Area')
+
+    if 0:
+        cst.visualize_grid_statistics(feature = 'area', frame_range = [1,2], calculate_average = False, \
+                                    animate = True, frame_interval = 800, show = True)
+        cst.visualize_grid_statistics(feature = 'area', frame_range = [2,2], calculate_average = False, \
                                     animate = True, frame_interval = 800, show = True)
 
     print(grid_df.info())
