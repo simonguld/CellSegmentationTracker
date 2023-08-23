@@ -355,7 +355,7 @@ def velocity_field_plotter(X,Y, VX, VY, i = 0, title = None):
 def main():
     #df = pd.read_csv('../resources/epi500_sample_images_spots.csv')
     df = pd.read_csv('../resources/CellSegmentationTracker_spots.csv')
-
+    print(df.info())
     t1 = time.time()
     grid_df = calculate_grid_statistics(df, Ngrid = 15, return_absolute_cell_counts=True, include_features=[], save_csv = False,)
     t2 = time.time()
