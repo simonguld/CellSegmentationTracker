@@ -16,6 +16,7 @@ import xml.etree.ElementTree as et
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import matplotlib.animation as ani
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import rcParams
 from cycler import cycler
@@ -50,6 +51,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 ## fix.. sample images....
 
 # 2) Impl. grid analysis, incl saving and plotting
+### document
 # 3) Impl. density fluctuations
 # --> (inkl fix impl.) 
 # -->[allow plotting rel. to av cell number also?]
@@ -325,6 +327,87 @@ class CellSegmentationTracker:
         os.chdir(self.__working_dir)    
         return
     
+    def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None):
+        """
+        Plots a heatmap of the given feature for a given frame.
+        """  
+        arr_grid = frame.reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+
+        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2, 2) 
+        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2, 2)
+
+        ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax)
+
+        title = f'{feature.capitalize()} heatmap for frame = {i}' if title is None else title
+        ax.set(xlabel = 'x', ylabel = 'y', title = title)
+        ax.set_xticks(ticks = np.linspace(0.5,self.__grid_dict['Nx'] - 0.5, 4), labels=xticklabels)
+        ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
+        return
+
+    def __velocity_field_plotter(self,X, Y, VX, VY, i = 0, title = None):
+        """
+        Plot the velocity field for a given frame.
+        """
+        title = f'Velocity field for frame = {i}' if title is None else title
+
+        plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
+        plt.xlabel(xlabel = 'x')
+        plt.ylabel(ylabel = 'y')
+        plt.title(title)
+        return
+
+    def __animate_flow_field(self, i, X, Y, arr, fig, fn,):
+        """
+        Animate the flow field for a given frame. Used as a wrapper for the animator function.
+        """
+
+        # we want a fresh figure everytime
+        fig.clf()
+        # add subplot, aka axis
+        # load the frame
+        arr_vx = arr[arr[:, 0] == i][:, -2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        arr_vy = arr[arr[:, 0] == i][:, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        # call the global function
+        self.__velocity_field_plotter(X, Y, arr_vx, arr_vy, i=i)
+        return
+        
+    def __animator(self, arr, fn, rng, animate_wrapper = None, inter=200, show=True):
+        """Show a frame-by-frame animation.
+
+        Parameters:
+        arr -- the data array
+        fn -- the plot function (argument: fram number, frame)
+        rng -- range of the frames to be plotted
+        animate_wrapper -- wrapper function for the animation function
+        inter -- time between frames (ms)
+        show -- whether to show the animation
+        """
+
+        # create the figure
+        fig = plt.figure()
+
+        if animate_wrapper is None:
+            # the local animation function
+            def animate_fn(i):
+                # we want a fresh figure everytime
+                fig.clf()
+                # add subplot, aka axis
+                #ax = fig.add_subplot(111)
+                # load the frame
+                frame = arr[arr[:, 0] == i][:, -1]
+                # call the global function
+                fn(i, frame)
+        else:
+            animate_fn = lambda i: animate_wrapper(i, arr, fig, fn)
+                
+        anim = ani.FuncAnimation(fig, animate_fn,
+                                frames=np.arange(rng[0], rng[1]),
+                                interval=inter, blit=False)
+        if show==True:
+            plt.show()
+        return
+
+    
 
     #### Public methods ####
 
@@ -413,9 +496,20 @@ class CellSegmentationTracker:
         self.xml_path = self.img_path.strip(".tif") + ".xml"
         return
 
-    def generate_csv_files(self, calculate_velocities = True, get_tracks = True, get_edges = True, save_csv_files = True, name = None):
+    def generate_csv_files(self, calculate_velocities = True, get_tracks = True, \
+                           get_edges = True, save_csv_files = True, name = None):
         """
-        Generate csv files from xml file.
+        Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
+
+        Parameters:
+        -----------
+        calculate_velocities : (bool, default = True) - whether to calculate velocities from trackmate data and
+                                include them in the spots csv file
+        get_tracks : (bool, default = True) - whether to generate a dataframe with track features
+        get_edges : (bool, default = True) - whether to generate a dataframe with edge features
+        save_csv_files : (bool, default = True) - whether to save the csv files to the output folder
+        name : (str, default = None) - name of csv files. If None, the name of the image file is used.
+
 
         """
         if self.xml_path is not None:
@@ -454,6 +548,7 @@ class CellSegmentationTracker:
 
         Parameters:
         -----------
+        name : (str, default = None) - name of csv files. If None, the name of the image file is used.
 
         """
         if name is None:
@@ -477,6 +572,11 @@ class CellSegmentationTracker:
         return
 
     def print_settings(self):
+        """
+        Print the settings used for cellpose segmentation and trackmate tracking, as well as some
+        basic image information.
+        """
+
         root = et.fromstring(open(self.xml_path).read())
 
         im_settings = root.find('Settings').find('ImageData')
@@ -496,7 +596,7 @@ class CellSegmentationTracker:
         print("Trackmate settings: ", self.trackmate_dict, "\n")
         return
 
-    def summary_statistics(self):
+    def get_summary_statistics(self):
         """
         Calculate average values of observables for spot, track and edges observables
         """
@@ -556,14 +656,19 @@ class CellSegmentationTracker:
         Parameters:
         ----------
         dataframe : pandas dataframe generated by the function 'generate_csv_files'
-        Ngrid : int - number of grid squares in the smallest dimension. The number of grid squares in the other dimension 
-                is determined by the aspect ratio of the image, with the restriction that the grid squares are square.
-        include_features : list of strings - list of features to include in the grid dataframe, in addition to the standard features
-                        number_density, mean_velocity_X and mean_velocity_Y. The possible feature keys are the columns of the 
-                        spots dataframe generated by the function 'generate_csv_files'.
-        return_absolute_cell_counts : bool - if True, the number of cells in each grid square is returned instead of the density.
-        save_csv : bool - if True, the grid dataframe is saved as a csv file.
-        name : string - name of the csv file to be saved. It will be saved in the output_folder, if provided, otherwise in the image folder
+        Ngrid : int - number of grid squares in the smallest dimension. \
+                The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
+                with the restriction that the grid squares are square.
+        include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
+                            in addition to the standard features number_density, mean_velocity_X and mean_velocity_Y.
+                            The possible feature keys are the columns of the spots dataframe generated 
+                            by the function 'generate_csv_files'.
+        return_absolute_cell_counts : (bool, default = False) - if True, the number of cells in each grid square
+                                      is returned instead of the density.
+        save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
+        name : (string, default = './grid_statistics') - name of the csv file to be saved. 
+                                     It will be saved in the output_folder, if provided, 
+                                     otherwise in the image folder
 
         Returns:
         -------
@@ -578,7 +683,7 @@ class CellSegmentationTracker:
                 add_to_grid.append("mean_" + feature.lower())
 
         # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, cols].values
+        data = self.spots_df.loc[:, cols].values.astype('float')
 
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
@@ -611,7 +716,7 @@ class CellSegmentationTracker:
         self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
 
         # Initialize grid array
-        grid_arr = np.zeros([self.Nframes * self.__grid_dict['Nsquares'], len(grid_columns)])
+        grid_arr = np.ones([self.Nframes * self.__grid_dict['Nsquares'], len(grid_columns)])
 
         # Loop over all frames
         for i, frame in enumerate(np.arange(self.Nframes)):
@@ -621,14 +726,13 @@ class CellSegmentationTracker:
             for y in np.linspace(self.__grid_dict['ymax'] - self.__grid_dict['grid_len'], self.__grid_dict['ymin'], self.__grid_dict['Ny']):
                 mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + self.__grid_dict['grid_len'])
                 arr_Y = arr_T[mask]
-
                 for x in np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'] - self.__grid_dict['grid_len'], self.__grid_dict['Nx']):
                     mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + self.__grid_dict['grid_len'])
             
                     if mask.sum() == 0:
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid, 0:6] = \
-                            [frame, time, Ngrid, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0]
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid, 6:] = np.nan * np.zeros(len(grid_columns) - 6)
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:6] = \
+                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0]
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 6:] = np.nan * np.zeros(len(grid_columns) - 6)
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -641,76 +745,123 @@ class CellSegmentationTracker:
                         else:
                             denisty = mask.sum() / (self.__grid_dict['grid_len']**2)     
 
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid, 0:8] = [frame, time, Ngrid, x + self.__grid_dict['grid_len'] / 2, \
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:8] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
                                                                 y + self.__grid_dict['grid_len'] / 2, density, vx, vy]
-
                         # Add additional features to grid (if any)
                         for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid, 8 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 8 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                     Ngrid_count += 1
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
-
-
+        
         if save_csv:
             self.grid_df.to_csv(name_path, sep = ',')
 
         return self.grid_df
 
-    def visualize_grid_statistics(self, grid_dataframe, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                             animate = True, frame_interval = 800, show = True):
+    def visualize_grid_statistics(self, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
+                             animate = True, frame_interval = 1200, show = True):
+        """
+        Visualize the grid statistics (generated by the method calculate_grid_statistics) for a given feature 
+        in the form of a heatmap.
+
+        Parameters:
+        -----------
+        feature : (string, default = 'number_density') - feature to visualize. Must be a column of the grid dataframe \
+                  generated by the method calculate_grid_statistics.
+        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. If [0,0], all frames are visualized.
+        calculate_average : (bool, default=False) - if True, the average heatmap over the given frame range 
+                            is calculated and visualized.
+        animate : (bool, default=True) - if True, the heatmap is animated over the given frame range.
+        frame_interval : (int, default=1200) - time between frames in ms (for the animation).
+        show : (bool, default=True) - if True, the heatmap is shown.
+        """
+        if feature not in self.grid_df.columns:
+            print("\n Feature not in grid dataframe! Please specify a feature that is in the grid dataframe generated by the method calculate_grid_statistics.\n \
+            These features are: \n", self.grid_df.columns, "\n")
+        else:
+            Nframes = self.Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
+            frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
+            # Set colorbar limits
+            vmin, vmax = self.grid_df[feature].min(), self.grid_df[feature].max()
+
+            if self.grid_df is not None:
+                data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
+                data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
+            else: 
+                raise OSError("No grid dataframe provided! You must first run the function 'calculate_grid_statistics'.")
+
+            if calculate_average:
+                arr_T = data[:,-1].reshape(Nframes, self.__grid_dict['Nsquares'])
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    arr_T = np.nanmean(arr_T, axis = 0)
+                title = title=f'{feature.capitalize()} heatmap averaged over frames {frame_range[0]}:{frame_range[1]}'
+                self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
+            else:
+                heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, feature, vmin, vmax)
+                if animate:
+                    self.__animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
+                else:
+                    for i in range(frame_range[0], frame_range[1]):
+                        fig, ax = plt.subplots()
+                        frame = data[data[:, 0] == i, -1]
+                        heatmap_plotter_res(i, frame)
+            if show:
+                plt.show()
+        return
+
+    def plot_velocity_field(self, frame_range = [0,0], calculate_average = False, \
+                                animate = True, frame_interval = 1200, show = True):
+        """
+        Plot or animate the velocity field for a given frame range.
+
+        Parameters:
+        -----------
+        frame_range : (list of ints, default=[0,0] - range of frames to visualize. If [0,0], all frames are visualized.
+        calculate_average : (bool, default=False) - if True, the average velocity field over the given
+                            frame range is calculated and visualized.
+        animate : (bool, default=True) - if True, the velocity field is animated over the given frame range.
+        frame_interval : (int, default=1200) - time between frames in ms (for the animation).
+        show : (bool, default=True) - if True, the velocity field is shown.
     
-       
+        """
+    
         Nframes = self.Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
         frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
-        vmin, vmax = self.grid_df[feature].min(), self.grid_df[feature].max()
 
-        if self.grid_df is not None:
-            data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
-        else: 
-            raise OSError("No grid dataframe provided! You must first run the function 'calculate_grid_statistics'.")
+        data= self.grid_df.loc[:, ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y']].values
+        data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'], :]
+
+        x_center = data[:self.__grid_dict['Nsquares'], 2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        y_center = data[:self.__grid_dict['Nsquares'], 3].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
 
         if calculate_average:
-            arr_T = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],-1].reshape(Nframes, self.__grid_dict['Nsquares'])
+            arr_vx = data[:, -2].reshape(Nframes, self.__grid_dict['Nsquares'])
+            arr_vy = data[:, -1].reshape(Nframes, self.__grid_dict['Nsquares'])
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                arr_T = np.nanmean(arr_T, axis = 0)
-            title = title=f'{feature.capitalize()} heatmap averaged over frames {frame_range[0]}:{frame_range[1]}'
-            self.__heatmap_plotter(0, arr_T, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax,\
-                    title=title)
-        else:
-            heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax)
+                arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+            self.__velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, \
+                                title=f'Velocity field averaged over frames {frame_range[0]}:{frame_range[1]}')         
+        else:  
             if animate:
-                animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
+                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, fn,)
+                self.__animator(data, self.__velocity_field_plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
             else:
                 for i in range(frame_range[0], frame_range[1]):
-                    frame = data[data[:, 0] == i][:, -1]
-                    heatmap_plotter_res(i, frame)
+                    fig, ax = plt.subplots()
+                    arr_vx = data[data[:, 0] == i,-2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                    arr_vy = data[data[:, 0] == i, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                    self.__velocity_field_plotter(x_center, y_center, arr_vx, arr_vy, i=i)
         if show:
             plt.show()
         return
 
-    def __heatmap_plotter(self, i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax, title=None):
-        """
-        Plots a heatmap of the given feature for a given frame.
-        """
-
-        # reshape to grid
-        #arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
-        arr_grid = frame.reshape(Nygrid, Nxgrid)
-   
-        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2, 2) 
-        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2, 2)
-
-        ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax)
-
-        title = f'{feature.capitalize()} heatmap for frame = {i}' if title is None else title
-        ax.set(xlabel = 'x', ylabel = 'y', title = title)
-        ax.set_xticks(ticks = np.linspace(0.5,Nxgrid-0.5,4), labels=xticklabels)
-        ax.set_yticks(ticks = np.linspace(0.5,Nygrid-0.5,4), labels=yticklabels)
-        return
-
+    
+#ax.streamplot(np.unique(x_center), np.unique(y_center), vx, vy, density = 1.5, color = 'black')
 
 def main():
     
@@ -749,12 +900,32 @@ def main():
     t2= time.time()
     cst.spots_df = pd.read_csv('./resources/CellSegmentationTracker_spots.csv')
 
-    print(cst.spots_df.info())
-    print(cst.spots_df.describe())
+   # print(cst.spots_df.info())
+   # print(cst.spots_df.describe())
 
-    grid_df = cst.calculate_grid_statistics(Ngrid = 7, return_absolute_cell_counts=True, save_csv=False)
+    grid_df = cst.calculate_grid_statistics(Ngrid = 25, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
+    print(grid_df.columns)
+
+
+    cst.plot_velocity_field(frame_range = [0,4], calculate_average = False, \
+                                animate = False, frame_interval = 800, show = True)
+
+    cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
+                                    animate = True, frame_interval = 800, show = True)
+
+   # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
+
+    #cst.plot_feature_over_time('Area')
+
+    if 0:
+        cst.visualize_grid_statistics(feature = 'area', frame_range = [0,1], calculate_average = False, \
+                                    animate = True, frame_interval = 800, show = True)
+        cst.visualize_grid_statistics(feature = 'area', frame_range = [10,11], calculate_average = False, \
+                                    animate = True, frame_interval = 800, show = True)
 
     print(grid_df.info())
+
+
     
     print("RUNTIME: ", (t2-t1)/60)
 

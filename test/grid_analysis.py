@@ -187,9 +187,10 @@ def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_
         Nygrid = int(np.round(Nsquares / Nxgrid) )
 
     data = grid_dataframe.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
+    data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares,:]
 
     if calculate_average:
-        arr_T = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares,-1].reshape(Nframes, Nsquares)
+        arr_T = data[:,-1].reshape(Nframes, Nsquares)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             arr_T = np.nanmean(arr_T, axis = 0)
@@ -202,7 +203,7 @@ def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_
             animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
         else:
             for i in range(frame_range[0], frame_range[1]):
-                frame = data[data[:, 0] == i][:, -1]
+                frame = data[data[:, 0] == i, -1]
                 heatmap_plotter_res(i, frame)
     if show:
         plt.show()
@@ -213,7 +214,7 @@ def heatmap_plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, 
     """
     Plots a heatmap of the given feature for a given frame.
     """
-
+    fig, ax = plt.subplots()
     # reshape to grid
     #arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
     arr_grid = frame.reshape(Nygrid, Nxgrid)
@@ -297,12 +298,14 @@ def plot_velocity_field(grid_dataframe, frame_range = [0,0], calculate_average =
         Nygrid = int(np.round(Nsquares / Nxgrid) )
 
     data= grid_dataframe.loc[:, ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y']].values
+    data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, :]
+
     x_center = data[:Nsquares, 2].reshape(Nygrid, Nxgrid)
     y_center = data[:Nsquares, 3].reshape(Nygrid, Nxgrid)
 
     if calculate_average:
-        arr_vx = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, -2].reshape(Nframes, Nsquares)
-        arr_vy = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, -1].reshape(Nframes, Nsquares)
+        arr_vx = data[:, -2].reshape(Nframes, Nsquares)
+        arr_vy = data[:, -1].reshape(Nframes, Nsquares)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             arr_vx = np.nanmean(arr_vx, axis = 0).reshape(Nygrid, Nxgrid)
@@ -337,8 +340,6 @@ def animate_flow_field(i, X, Y, arr, fig, fn, Nx, Ny):
     return
     
 
-
-
 def velocity_field_plotter(X,Y, VX, VY, i = 0, title = None):
 
     plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
@@ -356,13 +357,16 @@ def main():
     df = pd.read_csv('../resources/CellSegmentationTracker_spots.csv')
 
     t1 = time.time()
-    grid_df = calculate_grid_statistics(df, Ngrid = 25, return_absolute_cell_counts=True, include_features=[], save_csv = False,)
+    grid_df = calculate_grid_statistics(df, Ngrid = 15, return_absolute_cell_counts=True, include_features=[], save_csv = False,)
     t2 = time.time()
 
     print(f'Time elapsed for grid calc: {t2 - t1:.2f} s')
 
 
-    plot_velocity_field(grid_df, frame_range = [0,0], calculate_average = False, \
+   # visualize_grid_statistics(grid_df, feature = 'number_density', calculate_average = False, frame_range=[0,5], \
+    #                          animate=False, frame_interval=2000, show = True)
+
+    plot_velocity_field(grid_df, frame_range = [0,5], calculate_average = True, \
                                 animate = True, frame_interval = 2000, show = True)
 
    # print(grid_df.loc[15:])
