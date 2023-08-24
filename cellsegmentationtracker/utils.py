@@ -236,8 +236,7 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
             spot_objects.append(single_object)
 
     df_spots = pd.DataFrame(spot_objects, columns=spot_features).astype('float')
-    
-
+ 
     # Apply initial filtering
     initial_filter = root.find("Settings").find("InitialSpotFilter")
 
@@ -259,7 +258,6 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
     df_spots = df_spots.loc[:, object_labels.keys()]
     df_spots.columns = [object_labels[k] for k in object_labels.keys()]
     df_spots['TRACK_ID'] = np.arange(df_spots.shape[0])
-
 
     # Get track IDs
     filtered_track_ids = [int(track.get('TRACK_ID')) for track in root.find('Model').find('FilteredTracks').findall('TrackID')]
@@ -306,6 +304,7 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
     # Label remaining columns
     single_track = df_spots.loc[df_spots["TRACK_ID"].isnull()]
     df_spots.loc[df_spots["TRACK_ID"].isnull(), "TRACK_ID"] = label_id + np.arange(0, len(single_track))
+    
 
     if calculate_velocities:
         # Extract velocities
@@ -322,7 +321,6 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
 
             df_spots['Velocity_X'].iloc[idx] = velocity_x
             df_spots['Velocity_Y'].iloc[idx] = velocity_y
-
 
     if get_edge_features:
         df_edges = pd.DataFrame(edge_objects, columns=edge_features).astype(float)
@@ -377,7 +375,7 @@ def print_all_possible_spot_features():
 
 
 def main():
-    import tifffile
+
     from PIL import Image
     path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject"
     new_path = path.strip(".tif") + "_resized.tif"
@@ -393,20 +391,24 @@ def main():
     target_height = 648
     names = ['epi6000.tif', 'epi2500.tif']
     
+    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\tt"
 
+    merge_tiff(im_p, os.path.join(im_p, "merged.tif"), Nframes = 4)
+
+    if 0:
     
-    for i, dirr in enumerate([dir2]):
-        im0 = get_imlist(dirr, format = '.tif')[0]
-        target_width, target_height = get_target_dimensions(im0, division_factor = 1)
-        resize_imlist(dirr, target_width, target_height)
-        dirrr = dirr + f"_resized_{target_width}x{target_height}"
+        for i, dirr in enumerate([dir2]):
+            im0 = get_imlist(dirr, format = '.tif')[0]
+            target_width, target_height = get_target_dimensions(im0, division_factor = 1)
+            resize_imlist(dirr, target_width, target_height)
+            dirrr = dirr + f"_resized_{target_width}x{target_height}"
 
-        merge_tiff(dirrr, os.path.join(path, f"{names[i]}"), Nframes = 4)
+            merge_tiff(dirrr, os.path.join(path, f"{names[i]}"), Nframes = 4)
 
 
-            #split_tiff(im_path)
+                #split_tiff(im_path)
 
-        #split_tif(im_path)
+            #split_tif(im_path)
 
     if 0:
         img = Image.open(path2)

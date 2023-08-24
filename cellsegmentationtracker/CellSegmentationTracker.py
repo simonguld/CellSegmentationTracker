@@ -50,7 +50,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 ##EST: 30 min
 # 1) TEST: Prøv modeller af på de forskellige datasæt. virker DET?
 # 11) compare velocties to trackmate speed
-## fix.. sample images....
+
 
 # 6) Documents methods, attributes, class in readme and script
 # 7) Finish README
@@ -58,9 +58,12 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 ## TEST TEST TEST And read trough to get rid of errors
 
-# NOW: if not much time, do 
 # 9) Make sure package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
 # 10) test it by making new venc
+# 11) send with notes etc (++ valeriia meeting v-analysis??)
+
+
+
 
 # If much time, start with:
 # 2) Impl. grid analysis, incl saving and plotting
@@ -88,6 +91,7 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # Tas' method
 # vorticity???
 # try on nuclei data. works?
+# let frame --> t
 
 ### HANDLING UNITS:
 # input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
@@ -627,15 +631,15 @@ class CellSegmentationTracker:
 
         if self.spots_df is not None:
             path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
-            self.spots_df.to_csv(path_out_spots, sep = ',') 
+            self.spots_df.to_csv(path_out_spots, index = False) 
             print("Saved spots csv file to: ", path_out_spots)
         if self.tracks_df is not None:
             path_out_tracks = os.path.join(self.output_folder, name + '_tracks.csv')
-            self.tracks_df.to_csv(path_out_tracks, sep = ',') 
+            self.tracks_df.to_csv(path_out_tracks, index = False) 
             print("Saved tracks csv file to: ", path_out_tracks)
         if self.edges_df is not None:
             path_out_edges = os.path.join(self.output_folder, name + '_edges.csv')
-            self.edges_df.to_csv(path_out_edges, sep = ',')
+            self.edges_df.to_csv(path_out_edges, index = False)
             print("Saved edges csv file to: ", path_out_edges)
         return
 
@@ -1033,36 +1037,36 @@ def main():
     path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
-    t1= time.time()
-    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi500_sample_images.xml'
+    
+    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
 
     dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
-    image_path = os.path.join(dir_path, 'resources', 'epi500_sample_images.tif')
+    image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
+    pn = "./resources/epi2500.tif"
 
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
+    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
                                   show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
-    #cst.run_segmentation_tracking()
+    t1= time.time()
+   # cst.run_segmentation_tracking()
     t2= time.time()
     print("RUNTIME: ", (t2-t1)/60)
-    #cst.generate_csv_files(save_csv_files=True, name='im11')
-    cst.spots_df = pd.read_csv('./resources/im11_spots.csv', sep=',')
+
+    cst.generate_csv_files()
 
     cst.get_summary_statistics()
-    print(cst.spots_df.info()  )
-    print(cst.spots_df.describe())
-    print(cst.spots_df.head())
 
-    cst.calculate_grid_statistics(Ngrid = 6, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
+    cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
 
-    cst.visualize_grid_statistics(feature = 'mean_area', frame_range = [0,1], calculate_average = False, \
-                                        animate = False, frame_interval = 800, show = False)
-    plt.title(r"Area heatmap (microns$^2$)")
-    plt.xlabel("x (microns)")
-    plt.ylabel("y (microns)")
- 
+    cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
+                                        animate = True, frame_interval = 800, show = True)
     #plt.savefig(f'./resources/cell_number_heatmap_10x12_grid.png', dpi=420, transparent=False,)
     plt.show()
+
+    cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,0], calculate_average = False, \
+                                    animate = True, frame_interval = 800, show = True)
+
+
 
 
     if 0:
