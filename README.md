@@ -43,6 +43,10 @@
       </ul>
     <li><a href="#pretrained-models">Pretrained Models</a></li>
     <li><a href="#documentation">Documentation</a></li>
+    <ul>
+        <li><a href="#parameters">Parameters</a></li>
+        <li><a href="#limitations">Limitations</a></li>
+      </ul>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -184,17 +188,17 @@ _Example Image_
 ```python
 class CellSegmentationTracker.CellSegmentationTracker(self, imagej_filepath, cellpose_python_filepath,
  image_folder_path = None, xml_path = None, output_folder_path = None, use_model = 'CYTO',
-custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {}):
+custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {})
 ```
 
 
 ```python
  __init__(self, imagej_filepath, cellpose_python_filepath, image_folder_path = None, xml_path = None,
 output_folder_path = None, use_model = 'CYTO', custom_model_path = None, show_segmentation = False,
-cellpose_dict = {}, trackmate_dict = {}):
+cellpose_dict = {}, trackmate_dict = {})
 ```
 
-**Parameters:**    
+#### **Parameters:**    
 - **imagej_filepath: (str, default=None)**
   - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder. If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
 - **cellpose_python_filepath: (str, default=None)**
@@ -232,8 +236,167 @@ can be used for postprocess analysis
 ```NB```: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, which can lead to inaccurate velocity estimations.
 
 **Attributes:**
+- **img_folder: (str)** - The path to the .tif input image folder containing, if provided
+- **xml_path: (str)** - The path to the TrackMate XML file, if provided. If generated, it will be saved in the image folder
+- **output_folder: (str)** - The path to the folder where output files will be saved.
+- **cellpose_dict: (dict)** - A dictionary containing the parameters passed to the Cellpose segmentation algorithm
+- **trackmate_dict: (dict)** - A dictionary containing the parameters passed to the TrackMate LAPTracker
+- **cellpose_default_values: (dict)** - A dictionary containing the default values for the parameters passed to the Cellpose segmentation algorithm
+- **trackmate_default_values: (dict)** - A dictionary containing the default values for the parameters passed to the TrackMate LAPTracker  
+- **pretrained_models: (list)** - A list of the pretrained Cellpose models available for segmentation
+- **spots_df: (pandas.DataFrame)** - A dataframe containing the spot data from the TrackMate XML file
+- **tracks_df: (pandas.DataFrame)** - A dataframe containing the track data from the TrackMate XML file
+- **edges_df: (pandas.DataFrame)** - A dataframe containing the edge data from the TrackMate XML file
+- **grid_df: (pandas.DataFrame)** - A dataframe containing the grid data, if generated
+    
+
 
 **Methods:**
+
+List of methods:
+- run_segmentation_tracking
+- generate_csv_files
+- get_summary_statistics
+- plot_feature_over_time
+- calculate_grid_statistics
+- visualize_grid_statistics
+- plot_velocity_field
+- get_feature_keys
+- print_settings 
+
+
+
+  
+
+
+
+```python
+run_segmentation_tracking()
+```
+Run cellpose segmentation and trackmate tracking.
+
+
+```python
+generate_csv_files(calculate_velocities = True, get_tracks = True, 
+                           get_edges = True, save_csv_files = True, name = None)
+```
+Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
+
+Parameters:
+- **calculate_velocities : (bool, default = True)**
+    - whether to calculate velocities from trackmate data and
+                                include them in the spots csv file
+- **get_tracks : (bool, default = True)**
+    - whether to generate a dataframe with track features
+- **get_edges : (bool, default = True)**
+    - whether to generate a dataframe with edge features
+- **save_csv_files : (bool, default = True)**
+    - whether to save the csv files to the output folder
+- **name : (str, default = None)**
+    - name of csv files. If None, the name of the image file is used.
+
+```python
+get_summary_statistics()
+```
+Calculate average values of observables for spot, track and edges observables
+
+
+```python
+plot_feature_over_time(spot_feature = 'Area')
+```
+Plots the average values of a feature over time.
+
+Parameters:
+- **spot_feature : (str, default = 'Area')**
+    - Name of spot feature to plot.
+
+
+```python
+calculate_grid_statistics(Ngrid, include_features = [], return_absolute_cell_counts = False,
+                               save_csv = True, name = None)
+```
+Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
+
+Parameters:
+- **Ngrid: (int > 0)**
+    - number of grid squares in the smallest dimension. The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
+                with the restriction that the grid squares are square.
+- **include_features : (list of strings, default = [])**
+    - list of features to include in the grid dataframe, 
+                            in addition to the standard features number_density, mean_velocity_X and mean_velocity_Y.
+                            The possible feature keys are the columns of the spots dataframe generated 
+                            by the function 'generate_csv_files'.
+- **return_absolute_cell_counts : (bool, default = False)**
+    - if True, the number of cells in each grid square
+                                      is returned instead of the density.
+- ** save_csv : (bool, default=True)**
+    - if True, the grid dataframe is saved as a csv file.
+- **name : (string, default = None)**
+    - name of the csv file. If None, the name of the image file is used. It will be saved in the output_folder, if provided, 
+                                     otherwise in the image folder
+
+
+```python
+visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
+                             animate = True, frame_interval = 1200, show = True)
+```
+Visualize the grid statistics (generated by the method calculate_grid_statistics) for a given feature 
+        in the form of a heatmap.
+
+Parameters:
+- **feature : (string, default = 'number_density')**
+    - feature to visualize. Must be a column of the grid dataframe \
+                  generated by the method calculate_grid_statistics.
+- **frame_range : (list of ints, default=[0,0])**
+    - range of frames to visualize. Left endpoint is included, right endpoint is not.
+                      If [0,0], all frames are visualized.
+- ** calculate_average : (bool, default=False)**
+    - if True, the average heatmap over the given frame range 
+                            is calculated and visualized.
+- ** animate : (bool, default=True))**
+    - if True, the heatmap is animated over the given frame range.
+- **frame_interval : (int, default=1200)**
+    - time between frames in ms (for the animation).
+- **show : (bool, default=True)**
+    - of True, the figures are shown
+
+
+```python
+plot_velocity_field(mode = 'field', frame_range = [0,0], calculate_average = False, \
+                                animate = True, frame_interval = 1200, show = True)
+```
+Plot or animate the velocity field for a given frame range.
+
+Parameters:
+- **mode : (string, default = 'field_lines')**
+    - mode of visualization. Can be 'field' or 'streamlines'
+- **frame_range : (list of ints, default=[0,0])**
+    - range of frames to visualize. Left endpoint is included, right endpoint is not.
+                      If [0,0], all frames are visualized.
+- ** calculate_average : (bool, default=False)**
+    - if True, the average heatmap over the given frame range 
+                            is calculated and visualized.
+- ** animate : (bool, default=True))**
+    - if True, the heatmap is animated over the given frame range.
+- **frame_interval : (int, default=1200)**
+    - time between frames in ms (for the animation).
+- **show : (bool, default=True)**
+    - of True, the figures are shown
+
+
+```python
+get_feature_keys()
+```
+Get the keys of the features in the csv files.
+
+```python
+print_settings()
+```
+Print the settings used for cellpose segmentation and trackmate tracking, as well as some
+        basic image information.
+
+
+
 
 <!-- CONTRIBUTING -->
 ## Contributing
