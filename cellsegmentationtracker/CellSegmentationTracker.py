@@ -148,8 +148,8 @@ class CellSegmentationTracker:
 
         if self.__cellpose_python_filepath is not None:
             self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
-            self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
-                                        os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
+            self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
+                                        os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
                                         os.path.join(self.__class_path, 'models', 'epi500'), \
                                         os.path.join(self.__class_path, 'models', 'epi2500'), \
@@ -244,7 +244,9 @@ class CellSegmentationTracker:
         elif self.img_folder[-4:] == ".tif":
             self.__img_path = self.img_folder
             self.img_folder = os.path.dirname(self.img_folder)
+            return
         else:
+            print("\nUsing image folder: ", self.img_folder)
             im_list = get_imlist(self.img_folder, '.tif')
             # If more than one .tif file is provided, merge them into one
             if len(im_list) > 1:
@@ -252,7 +254,7 @@ class CellSegmentationTracker:
                 self.__img_path = os.path.join(self.img_folder, "merged.tif")
                 if os.path.isfile(self.__img_path):
                     os.remove(self.__img_path)
-                merge_tiff(self.img_folder, img_out_name = os.path.join(self.img_folder, "merged.tif"))
+                merge_tiff(self.img_folder, img_out_path = os.path.join(self.img_folder, "merged.tif"))
                 print("\nMerged tif files into one file: ", self.__img_path)
             else:
                 self.__img_path = im_list[0]
@@ -704,7 +706,7 @@ class CellSegmentationTracker:
                 print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Nspots:.3f}")
 
         # Calculate average values of track observables
-        if self.tracks_df is not None:
+        if self.tracks_df is not None and self.__Ntracks > 0:
             tracks_exclude_list = ['TRACK_INDEX', 'TRACK_ID','TRACK_START', 'TRACK_STOP', 'TRACK_MAX_SPEED',\
                                     'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', 'MAX_DISTANCE_TRAVELED',\
                                     'CONFINEMENT_RATIO', 'MEAN_STRAIGHT_LINE_SPEED', 'LINEARITY_OF_FORWARD_PROGRESSION',\
@@ -902,6 +904,9 @@ class CellSegmentationTracker:
         show : (bool, default=True) - if True, the velocity field is shown.
     
         """
+        if self.__Nframes == 1:
+            print("\nOnly one frame in the image! Velocity is undefined.\n")
+            return
         if mode not in ['field', 'streamlines']:
             print("\nInvalid mode! Please specify a valid mode: 'field' or 'streamlines'.\n")
             return
