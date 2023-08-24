@@ -213,7 +213,6 @@ class CellSegmentationTracker:
         self.__Nframes = None
         self.__return_absolute_cell_counts = False
 
-        print(self.__pretrained_models_paths)
 
     #### Private methods ####
 
