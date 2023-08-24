@@ -130,10 +130,6 @@ class CellSegmentationTracker:
     tracks_df: (pandas.DataFrame) - A dataframe containing the track data from the TrackMate XML file
     edges_df: (pandas.DataFrame) - A dataframe containing the edge data from the TrackMate XML file
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
-
-
-
-
     """
 
     def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
@@ -970,6 +966,16 @@ class CellSegmentationTracker:
 
         """
 
+
+        # NOTES:
+         ## make it work for one frame
+        # make it work for several (avg over more frames --> av of fluctuations over frames
+        # make opt N or dens.
+        # make opt to average or not?
+
+
+
+
         # Extract relevant data from dataframe as array
         data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
 
@@ -1026,8 +1032,5 @@ class CellSegmentationTracker:
         return density_fluctuations, window_sizes
 
     
-    ## make it work for one frame
-    # make it work for several (avg over more frames --> av of fluctuations over frames
-    # make opt N or dens.
-    # make opt to average or not?
+   
 
