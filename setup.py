@@ -17,6 +17,8 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.9',
-    ]
+    ],
+    include_package_data=True,
+    package_data={'': ['models/*']}
 
 )

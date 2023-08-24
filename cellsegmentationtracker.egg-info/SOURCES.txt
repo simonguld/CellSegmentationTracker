@@ -10,3 +10,6 @@ cellsegmentationtracker.egg-info/SOURCES.txt
 cellsegmentationtracker.egg-info/dependency_links.txt
 cellsegmentationtracker.egg-info/requires.txt
 cellsegmentationtracker.egg-info/top_level.txt
+cellsegmentationtracker/models/epi2500
+cellsegmentationtracker/models/epi500
+cellsegmentationtracker/models/epi6000
