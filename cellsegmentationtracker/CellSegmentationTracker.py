@@ -141,7 +141,6 @@ class CellSegmentationTracker:
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
-        self.__parent_dir = os.path.abspath(os.path.join(self.__class_path, os.pardir))
         self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if self.__imagej_filepath is not None else None
 
         self.img_folder = image_folder_path
@@ -152,9 +151,9 @@ class CellSegmentationTracker:
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
-                                        os.path.join(self.__parent_dir, 'models', 'epi500'), \
-                                        os.path.join(self.__parent_dir, 'models', 'epi2500'), \
-                                            os.path.join(self.__parent_dir, 'models', 'epi6000')]
+                                        os.path.join(self.__class_path, 'models', 'epi500'), \
+                                        os.path.join(self.__class_path, 'models', 'epi2500'), \
+                                            os.path.join(self.__class_path, 'models', 'epi6000')]
         else:
             self.__cellpose_folder_path = None
             self.__pretrained_models_paths = None
