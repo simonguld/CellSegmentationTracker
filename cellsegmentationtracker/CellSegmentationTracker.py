@@ -1,4 +1,5 @@
 ## Author: Simon Guldager Andersen
+## Date (latest update): 2023-08-24
 
 ## Imports:
 import os
@@ -8,21 +9,17 @@ import time
 import warnings
 from subprocess import Popen, PIPE
 
-
 import numpy as np
 import seaborn as sns
 import pandas as pd
 import xml.etree.ElementTree as et
 
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 import matplotlib.animation as ani
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import rcParams
 from cycler import cycler
 
 from .utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
-
 
 ## Set plotting style and print options
 sns.set_theme()
@@ -36,89 +33,6 @@ d_colors = {'axes.prop_cycle': cycler(color = ['teal', 'navy', 'coral', 'plum', 
 rcParams.update(d)
 rcParams.update(d_colors)
 np.set_printoptions(precision = 5, suppress=1e-10)
-
-
-
-
-
-##TODO:
-
-##ESSENTIAL (DO FIRST)
-
-# TODO i prioriteret rækkefølge:::
-
-# 1) TEST: Prøv modeller af epi6000.
-
-
-# 6) Documents methods, attributes, class in readme and script
-# 7) Finish README
-# 8) Finish example notebook (possibly: allow for im_path to be hyperlink)
-
-## TEST TEST TEST And read trough to get rid of errors
-
-# 9) Make sure package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
-# 10) test it by making new venc
-# 11) send with notes etc (++ valeriia meeting v-analysis??)
-
-
-
-
-# If much time, start with:
-# 2) Impl. grid analysis, incl saving and plotting
-### document
-# 3) Impl. density fluctuations
-# --> (inkl fix impl.) 
-# -->[allow plotting rel. to av cell number also?]
-# --> allso number density vs denisty
-## TEST TEST TEST And read trough to get rid of errors
-# --> dur det på big data?
-
-
-# pixels --> physical if provided. ALSP (unit dict?)
-
-
-# EFTER SEND-OFF:
-
-### METHODS:
-
-# comp. speeds to trackmate
-
-# MSD and CRMSD
-# Nearest neighbors estimator?
-# Tas' method
-# vorticity???
-# try on nuclei data. works?
-# let frame --> t
-
-### HANDLING UNITS:
-# input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
-# CHECK XML TO see if time and lengths are provided. otherwise print info message
-# ALSO possbily allow entering physical units
-# NBNBNB: Velocities depend on it!
-
-### ATTRIBUTES
-# allow for user providing csvs????
-# make a print all features method
-# possibly extend grid analysis to include all features
-
-### VISUALIZATION
-# SPEND A LITTLE TIME ON:
-# make show_tracks opt?
-# fix cellmask color if possible(se på features/featureutils.java)
-
-### RUN-SPPED
-# CONSIDER:
-# not loading all features to csv
-#  2) not calculating everything in trackmate 
-# 3) resizing input 
-
-
-## NONESSENTIAL (IF TIME)
-# include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
-# train nuclei data. NB: 1 bad img
-# make naming of xml and csv files more flexible
-# make roubst under other image formats?
-# make robust under color, multichannel etc?
 
 
 class CellSegmentationTracker:
@@ -199,6 +113,27 @@ class CellSegmentationTracker:
     NB: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, 
         which can lead to inaccurate velocity estimations.
 
+
+    Attributes:
+    ------------
+    img_folder: (str) - The path to the .tif input image folder containing, if provided
+    xml_path: (str) - The path to the TrackMate XML file, if provided. If generated, it will be saved in the image folder
+    output_folder: (str) - The path to the folder where output files will be saved.
+    cellpose_dict: (dict) - A dictionary containing the parameters passed to the Cellpose segmentation algorithm
+    trackmate_dict: (dict) - A dictionary containing the parameters passed to the TrackMate LAPTracker
+    cellpose_default_values: (dict) - A dictionary containing the default values for the parameters passed to the Cellpose
+                             segmentation algorithm
+    trackmate_default_values: (dict) - A dictionary containing the default values for the parameters passed to the TrackMate
+                              LAPTracker  
+    pretrained_models: (list) - A list of the pretrained Cellpose models available for segmentation
+    spots_df: (pandas.DataFrame) - A dataframe containing the spot data from the TrackMate XML file
+    tracks_df: (pandas.DataFrame) - A dataframe containing the track data from the TrackMate XML file
+    edges_df: (pandas.DataFrame) - A dataframe containing the edge data from the TrackMate XML file
+    grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
+
+
+
+
     """
 
     def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
@@ -218,7 +153,7 @@ class CellSegmentationTracker:
 
         if self.__cellpose_python_filepath is not None:
             self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
-            self.pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
+            self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
                                         os.path.join(self.__parent_dir, 'models', 'epi500'), \
@@ -226,7 +161,7 @@ class CellSegmentationTracker:
                                             os.path.join(self.__parent_dir, 'models', 'epi6000')]
         else:
             self.__cellpose_folder_path = None
-            self.pretrained_models_paths = None
+            self.__pretrained_models_paths = None
         
         # Set output folder path to image folder path, if not provided, and to current path if image folder path is not provided
         if output_folder_path is None:
@@ -432,6 +367,35 @@ class CellSegmentationTracker:
         os.chdir(self.__working_dir)    
         return
     
+    def __save_csv(self, name = None):
+        """
+        Save csv files to output folder.
+
+        Parameters:
+        -----------
+        name : (str, default = None) - name of csv files. If None, the name of the image file is used.
+
+        """
+        if name is None:
+            try:
+                name = os.path.basename(self.__img_path).strip(".tif")
+            except:
+                name = 'CellSegmentationTracker'
+
+        if self.spots_df is not None:
+            path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
+            self.spots_df.to_csv(path_out_spots, index = False) 
+            print("Saved spots csv file to: ", path_out_spots)
+        if self.tracks_df is not None:
+            path_out_tracks = os.path.join(self.output_folder, name + '_tracks.csv')
+            self.tracks_df.to_csv(path_out_tracks, index = False) 
+            print("Saved tracks csv file to: ", path_out_tracks)
+        if self.edges_df is not None:
+            path_out_edges = os.path.join(self.output_folder, name + '_edges.csv')
+            self.edges_df.to_csv(path_out_edges, index = False)
+            print("Saved edges csv file to: ", path_out_edges)
+        return
+
     def __initialize_grid(self, Ngrid):
         """
         Initialize grid dictionary.
@@ -610,7 +574,7 @@ class CellSegmentationTracker:
             raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)
         elif self.__custom_model_path is None and self.__use_model in self.pretrained_models:
             idx = self.pretrained_models.index(self.__use_model)
-            self.__custom_model_path = self.pretrained_models_paths[idx]
+            self.__custom_model_path = self.__pretrained_models_paths[idx]
         
 
         # Prepare images
@@ -680,7 +644,7 @@ class CellSegmentationTracker:
         self.__Nframes = self.spots_df['Frame'].max() + 1
 
         if save_csv_files:
-            self.save_csv(name)
+            self.__save_csv(name)
         return self.spots_df, self.tracks_df, self.edges_df
 
     def get_feature_keys(self):
@@ -693,35 +657,6 @@ class CellSegmentationTracker:
             print("Track features: ", self.tracks_df.columns)
         if self.edges_df is not None:
             print("Edge features: ", self.edges_df.columns)
-        return
-
-    def save_csv(self, name = None):
-        """
-        Save csv files to output folder.
-
-        Parameters:
-        -----------
-        name : (str, default = None) - name of csv files. If None, the name of the image file is used.
-
-        """
-        if name is None:
-            try:
-                name = os.path.basename(self.__img_path).strip(".tif")
-            except:
-                name = 'CellSegmentationTracker'
-
-        if self.spots_df is not None:
-            path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
-            self.spots_df.to_csv(path_out_spots, index = False) 
-            print("Saved spots csv file to: ", path_out_spots)
-        if self.tracks_df is not None:
-            path_out_tracks = os.path.join(self.output_folder, name + '_tracks.csv')
-            self.tracks_df.to_csv(path_out_tracks, index = False) 
-            print("Saved tracks csv file to: ", path_out_tracks)
-        if self.edges_df is not None:
-            path_out_edges = os.path.join(self.output_folder, name + '_edges.csv')
-            self.edges_df.to_csv(path_out_edges, index = False)
-            print("Saved edges csv file to: ", path_out_edges)
         return
 
     def print_settings(self):
@@ -807,13 +742,12 @@ class CellSegmentationTracker:
         return
 
     def calculate_grid_statistics(self, Ngrid, include_features = [], return_absolute_cell_counts = False,\
-                               save_csv = True, name_path = './grid_statistics'):
+                               save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results.
 
         Parameters:
         ----------
-        dataframe : pandas dataframe generated by the function 'generate_csv_files'
         Ngrid : int - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
                 with the restriction that the grid squares are square.
@@ -824,7 +758,7 @@ class CellSegmentationTracker:
         return_absolute_cell_counts : (bool, default = False) - if True, the number of cells in each grid square
                                       is returned instead of the density.
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
-        name : (string, default = './grid_statistics') - name of the csv file to be saved. 
+        name : (string, default = None) - name of the csv file to be saved. 
                                      It will be saved in the output_folder, if provided, 
                                      otherwise in the image folder
 
@@ -832,6 +766,8 @@ class CellSegmentationTracker:
         -------
         grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
         """
+        name = self.output_folder + '_grid_stats.csv' if name is None else name
+
         # Store whether to return absolute cell counts or density
         self.__return_absolute_cell_counts = return_absolute_cell_counts
 
@@ -892,7 +828,7 @@ class CellSegmentationTracker:
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
         
         if save_csv:
-            self.grid_df.to_csv(name_path, sep = ',')
+            self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
 
         return self.grid_df
 
@@ -1012,6 +948,8 @@ class CellSegmentationTracker:
             plt.show()
         return
 
+
+
     def get_density_fluctuations(self, Nwindows = 10, Ndof = 1):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 
@@ -1088,136 +1026,8 @@ class CellSegmentationTracker:
         return density_fluctuations, window_sizes
 
     
-
-
-
     ## make it work for one frame
     # make it work for several (avg over more frames --> av of fluctuations over frames
     # make opt N or dens.
     # make opt to average or not?
 
-
-if 0:
-    def main():
-        
-        model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
-        cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
-        imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
-
-        image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
-        input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
-        image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
-        im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
-        show_output = True
-        cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
-
-        # xml_path, outfolder, use_model = cyto2,nuclei, 
-        xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
-        xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
-        output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
-        
-        path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
-        new_path = path.strip(".tif") + "_resized.tif"
-        np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
-        path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
-        pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
-        pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
-        
-        xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
-
-        dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
-        image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
-        pn = "./resources/epi2500.tif"
-
-
-        cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, output_folder_path=output_directory, \
-                                    show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
-        t1= time.time()
-    # cst.run_segmentation_tracking()
-        t2= time.time()
-        print("RUNTIME: ", (t2-t1)/60)
-
-    #  cst.generate_csv_files()
-        cst.spots_df = pd.read_csv('./resources/epi2500_spots.csv')
-
-        cst.get_summary_statistics()
-
-        cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-
-        cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                                            animate = False, frame_interval = 800, show = True)
-        #plt.savefig(f'./resources/cell_number_heatmap_10x12_grid.png', dpi=420, transparent=False,)
-        plt.show()
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,0], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-
-
-
-        if 0:
-
-            grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-        
-
-
-
-            cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-
-
-            grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-        
-
-
-
-            cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                        animate = False, frame_interval = 800, show = False)
-            
-            cst.plot_velocity_field(mode = 'field', frame_range = [2,4], calculate_average = False, \
-                                        animate = False, frame_interval = 800, show = True)
-
-            cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
-                                            animate = True, frame_interval = 800, show = True)
-
-        # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
-
-            #cst.plot_feature_over_time('Area')
-
-        if 0:
-            cst.visualize_grid_statistics(feature = 'area', frame_range = [1,2], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-            cst.visualize_grid_statistics(feature = 'area', frame_range = [2,2], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-            print(grid_df.info())
-
-
-            
-            print("RUNTIME: ", (t2-t1)/60)
-
-        # cst.generate_csv_files(save_csv_files=False)
-            t3 = time.time()
-            print("CSV gen time: ", (t3-t2)/60)
-            
-        #   for col in cst.spots_df.columns:
-        #      cst.plot_feature_over_time(col)
-            #cst.run_segmentation_tracking()
-        
-        if 0:
-            print(cst.flow_threshold, cst.cellprob_threshold)
-
-            print(cst.spots_df.info()  )
-            print(cst.spots_df.describe())
-            print(cst.tracks_df.info())
-            print(cst.edges_df.info())
-
-
-
-            cst.save_csv()
-            cst.print_settings()
-            print("you made it bro")
-
-    if __name__ == '__main__':
-        main()

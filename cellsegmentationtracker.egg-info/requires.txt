@@ -1,2 +1,3 @@
 tifftools
 seaborn
+scikit-image
