@@ -19,7 +19,7 @@ import matplotlib.animation as ani
 from matplotlib import rcParams
 from cycler import cycler
 
-from utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
+from .utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
 
 ## Set plotting style and print options
 sns.set_theme()
@@ -33,81 +33,6 @@ d_colors = {'axes.prop_cycle': cycler(color = ['teal', 'navy', 'coral', 'plum', 
 rcParams.update(d)
 rcParams.update(d_colors)
 np.set_printoptions(precision = 5, suppress=1e-10)
-
-
-
-##TODO:
-
-##ESSENTIAL (DO FIRST)
-
-# TODO i prioriteret rækkefølge:::
-
-# 1) TEST: Prøv modeller af epi6000.
-
-
-# clean up modules and scripts.
-# 9) Make sure package works INCLUDING FIX utiils --> cellsegmentationtracker.utils.
-# 10) test it by making new venc
-# 11) send with notes etc (++ valeriia meeting v-analysis??)
-
-
-
-# If much time, start with:
-# 2) Impl. grid analysis, incl saving and plotting
-### document
-# 3) Impl. density fluctuations
-# --> (inkl fix impl.) 
-# -->[allow plotting rel. to av cell number also?]
-# --> allso number density vs denisty
-## TEST TEST TEST And read trough to get rid of errors
-# --> dur det på big data?
-
-
-# pixels --> physical if provided. ALSP (unit dict?)
-
-
-# EFTER SEND-OFF:
-
-### METHODS:
-
-# comp. speeds to trackmate
-
-# MSD and CRMSD
-# Nearest neighbors estimator?
-# Tas' method
-# vorticity???
-# try on nuclei data. works?
-# let frame --> t
-
-### HANDLING UNITS:
-# input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
-# CHECK XML TO see if time and lengths are provided. otherwise print info message
-# ALSO possbily allow entering physical units
-# NBNBNB: Velocities depend on it!
-
-### ATTRIBUTES
-# allow for user providing csvs????
-# make a print all features method
-# possibly extend grid analysis to include all features
-
-### VISUALIZATION
-# SPEND A LITTLE TIME ON:
-# make show_tracks opt?
-# fix cellmask color if possible(se på features/featureutils.java)
-
-### RUN-SPPED
-# CONSIDER:
-# not loading all features to csv
-#  2) not calculating everything in trackmate 
-# 3) resizing input 
-
-
-## NONESSENTIAL (IF TIME)
-# include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
-# train nuclei data. NB: 1 bad img
-# make naming of xml and csv files more flexible
-# make roubst under other image formats?
-# make robust under color, multichannel etc?
 
 
 class CellSegmentationTracker:
@@ -205,10 +130,6 @@ class CellSegmentationTracker:
     tracks_df: (pandas.DataFrame) - A dataframe containing the track data from the TrackMate XML file
     edges_df: (pandas.DataFrame) - A dataframe containing the edge data from the TrackMate XML file
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
-
-
-
-
     """
 
     def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
@@ -220,7 +141,6 @@ class CellSegmentationTracker:
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
-        self.__parent_dir = os.path.abspath(os.path.join(self.__class_path, os.pardir))
         self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if self.__imagej_filepath is not None else None
 
         self.img_folder = image_folder_path
@@ -228,12 +148,12 @@ class CellSegmentationTracker:
 
         if self.__cellpose_python_filepath is not None:
             self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
-            self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto_0'), \
-                                        os.path.join(self.__cellpose_folder_path, 'models', 'cyto_1'),\
+            self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
+                                        os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
-                                        os.path.join(self.__parent_dir, 'models', 'epi500'), \
-                                        os.path.join(self.__parent_dir, 'models', 'epi2500'), \
-                                            os.path.join(self.__parent_dir, 'models', 'epi6000')]
+                                        os.path.join(self.__class_path, 'models', 'epi500'), \
+                                        os.path.join(self.__class_path, 'models', 'epi2500'), \
+                                            os.path.join(self.__class_path, 'models', 'epi6000')]
         else:
             self.__cellpose_folder_path = None
             self.__pretrained_models_paths = None
@@ -293,7 +213,6 @@ class CellSegmentationTracker:
         self.__Nframes = None
         self.__return_absolute_cell_counts = False
 
-
     #### Private methods ####
 
     def __generate_title(self, feature):
@@ -323,7 +242,9 @@ class CellSegmentationTracker:
         elif self.img_folder[-4:] == ".tif":
             self.__img_path = self.img_folder
             self.img_folder = os.path.dirname(self.img_folder)
+            return
         else:
+            print("\nUsing image folder: ", self.img_folder)
             im_list = get_imlist(self.img_folder, '.tif')
             # If more than one .tif file is provided, merge them into one
             if len(im_list) > 1:
@@ -331,7 +252,7 @@ class CellSegmentationTracker:
                 self.__img_path = os.path.join(self.img_folder, "merged.tif")
                 if os.path.isfile(self.__img_path):
                     os.remove(self.__img_path)
-                merge_tiff(self.img_folder, img_out_name = os.path.join(self.img_folder, "merged.tif"))
+                merge_tiff(self.img_folder, img_out_path = os.path.join(self.img_folder, "merged.tif"))
                 print("\nMerged tif files into one file: ", self.__img_path)
             else:
                 self.__img_path = im_list[0]
@@ -783,7 +704,7 @@ class CellSegmentationTracker:
                 print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Nspots:.3f}")
 
         # Calculate average values of track observables
-        if self.tracks_df is not None:
+        if self.tracks_df is not None and self.__Ntracks > 0:
             tracks_exclude_list = ['TRACK_INDEX', 'TRACK_ID','TRACK_START', 'TRACK_STOP', 'TRACK_MAX_SPEED',\
                                     'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', 'MAX_DISTANCE_TRAVELED',\
                                     'CONFINEMENT_RATIO', 'MEAN_STRAIGHT_LINE_SPEED', 'LINEARITY_OF_FORWARD_PROGRESSION',\
@@ -981,6 +902,9 @@ class CellSegmentationTracker:
         show : (bool, default=True) - if True, the velocity field is shown.
     
         """
+        if self.__Nframes == 1:
+            print("\nOnly one frame in the image! Velocity is undefined.\n")
+            return
         if mode not in ['field', 'streamlines']:
             print("\nInvalid mode! Please specify a valid mode: 'field' or 'streamlines'.\n")
             return
@@ -1045,6 +969,16 @@ class CellSegmentationTracker:
 
         """
 
+
+        # NOTES:
+         ## make it work for one frame
+        # make it work for several (avg over more frames --> av of fluctuations over frames
+        # make opt N or dens.
+        # make opt to average or not?
+
+
+
+
         # Extract relevant data from dataframe as array
         data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
 
@@ -1101,134 +1035,5 @@ class CellSegmentationTracker:
         return density_fluctuations, window_sizes
 
     
-    ## make it work for one frame
-    # make it work for several (avg over more frames --> av of fluctuations over frames
-    # make opt N or dens.
-    # make opt to average or not?
+   
 
-
-
-def main():
-    
-    model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
-    cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
-    imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
-
-    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
-    input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
-    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
-    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
-    show_output = True
-    cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
-
-    # xml_path, outfolder, use_model = cyto2,nuclei, 
-    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
-    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
-    output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
-    
-    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
-    new_path = path.strip(".tif") + "_resized.tif"
-    np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
-    path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
-    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
-    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
-    
-    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
-
-    dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
-    image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
-    pn = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.'
-
-
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
-                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
-    t1= time.time()
-    cst.run_segmentation_tracking()
-    t2= time.time()
-    print("RUNTIME: ", (t2-t1)/60)
-    cst.generate_csv_files()
-
-#  cst.generate_csv_files()
-  #  cst.spots_df = pd.read_csv('./resources/epi2500_spots.csv')
-
-    cst.get_summary_statistics()
-
-    cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-
-    cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                                        animate = False, frame_interval = 800, show = True)
-    #plt.savefig(f'./resources/cell_number_heatmap_10x12_grid.png', dpi=420, transparent=False,)
-    plt.show()
-
-    cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,0], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-
-
-
-    if 0:
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = False)
-        
-        cst.plot_velocity_field(mode = 'field', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = True)
-
-        cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-    # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
-
-        #cst.plot_feature_over_time('Area')
-
-    if 0:
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [1,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [2,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-        print(grid_df.info())
-
-
-        
-        print("RUNTIME: ", (t2-t1)/60)
-
-    # cst.generate_csv_files(save_csv_files=False)
-        t3 = time.time()
-        print("CSV gen time: ", (t3-t2)/60)
-        
-    #   for col in cst.spots_df.columns:
-    #      cst.plot_feature_over_time(col)
-        #cst.run_segmentation_tracking()
-    
-    if 0:
-        print(cst.flow_threshold, cst.cellprob_threshold)
-
-        print(cst.spots_df.info()  )
-        print(cst.spots_df.describe())
-        print(cst.tracks_df.info())
-        print(cst.edges_df.info())
-
-
-
-        cst.save_csv()
-        cst.print_settings()
-        print("you made it bro")
-
-if __name__ == '__main__':
-    main()
