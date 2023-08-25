@@ -146,7 +146,7 @@ class CellSegmentationTracker:
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
-        
+
         self.__cellpose_folder_path = cellpose_folder_path
 
         if self.__cellpose_python_filepath is not None:
