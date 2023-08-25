@@ -1,3 +1,7 @@
+__pycache__/
+.jython_cache/
+.pytest_cache/
+
 .xml
 .json
 
