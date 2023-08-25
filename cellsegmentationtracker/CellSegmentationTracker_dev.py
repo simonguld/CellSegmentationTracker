@@ -880,7 +880,7 @@ class CellSegmentationTracker:
                         if return_absolute_cell_counts:
                             density = mask.sum() 
                         else:
-                            denisty = mask.sum() / (self.__grid_dict['grid_len']**2)     
+                            density = mask.sum() / (self.__grid_dict['grid_len']**2)     
 
                         grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:8] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
                                                                 y + self.__grid_dict['grid_len'] / 2, density, vx, vy]
@@ -1018,7 +1018,7 @@ class CellSegmentationTracker:
 
 
 
-    def get_density_fluctuations(self, Nwindows = 10, Ndof = 1):
+    def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 
         This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
@@ -1084,33 +1084,34 @@ class CellSegmentationTracker:
                 # Get defects within window
                 defects_in_window = len(distances[distances < window_size])
                 # Calculate  and store density
-                defect_densities[frame, i] = defects_in_window #/ (np.pi * window_size**2)
+                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
 
-            # Step 4: Calculate average defect density (using a larger window size than max_window_size)
-            defects_in_window = len(distances[distances < max_window_size + avg_radius])
-            av_defect_densities[frame] = defects_in_window / (np.pi * (max_window_size + avg_radius)**2)
+
+        # Calculate average of average defect densities
+        if self.grid_df is None:
+            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
+            av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+            av_av_defect_densities = self.grid_df['number_density'].mean()
+            av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
 
         print(av_defect_densities)
-        # Calculate average of average defect densities
-        av_av_defect_densities = np.mean(av_defect_densities)
 
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-        print(defect_densities)
-        print(av_numbers)
         # Calculate fluctuations of defect density
-        density_fluctuations = np.mean((defect_densities - \
-                                        av_numbers[np.newaxis,:])**2, axis = 0)
-        #density_fluctuations = np.mean((defect_densities - av_defect_densities[:, np.newaxis])**2, axis = 0)
-        return np.sqrt(density_fluctuations), window_sizes
+        density_fluctuations = np.sqrt(np.mean((defect_densities - \
+                                        av_av_defect_densities)**2, axis = 0))
+        density_fluctuations = np.sqrt(np.mean((defect_densities - \
+                                        av_av_defect_densities)**2, axis = 0))
+
+        if return_absolute_cell_counts:
+            return density_fluctuations * (np.pi * window_sizes**2), window_sizes, av_numbers
+        else:
+            return density_fluctuations, window_sizes, av_numbers
 
     
    
 
 
-    
-## make it work for one frame
-# make it work for several (avg over more frames --> av of fluctuations over frames
-# make opt N or dens.
+ # compare av dens for grid og cirkel
 # include uncertainty in density
 # std v variance
 # make opt to average or not?
@@ -1138,7 +1139,7 @@ def main():
     
     path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
     new_path = path.strip(".tif") + "_resized.tif"
-    np = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\merged.tif"
+
     path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
@@ -1162,14 +1163,21 @@ def main():
     cst.spots_df = pd.read_csv('./resources/epi2500_spots.csv')
 
     #cst.get_summary_statistics()
+    #cst.calculate_grid_statistics(Ngrid = 10, include_features=[], return_absolute_cell_counts=False, save_csv=False)
 
+   # nd_grid = cst.grid_df['number_density'].mean()
 
-    dens_fluc, windows = cst.get_density_fluctuations(Nwindows = 10, Ndof = 1)
+    #print(nd_grid)
+    dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
+                                                                   return_absolute_cell_counts = True,)
+  #  nd_grid_no = nd_grid * (np.pi * windows**2)
   #  print(np.sqrt(dens_fluc))
     print(windows)
     print(".....")
     fig, ax = plt.subplots()
-    ax.plot(windows, dens_fluc, 'r.')
+    ax.plot(av_numbers, dens_fluc, 'r.')
+  #  ax.plot(nd_grid_no, dens_fluc, 'b.', label = 'nd grid')
+    ax.legend()
     plt.show()
 
     if 0:

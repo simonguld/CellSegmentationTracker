@@ -132,8 +132,9 @@ class CellSegmentationTracker:
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
     """
 
-    def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
+    def __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
                   use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict()):
+
 
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
@@ -145,9 +146,11 @@ class CellSegmentationTracker:
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
+        
+        self.__cellpose_folder_path = cellpose_folder_path
 
         if self.__cellpose_python_filepath is not None:
-            self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
+            self.__cellpose_folder_path = cellpose_folder_path
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
