@@ -138,7 +138,7 @@ class CellSegmentationTracker:
     """
 
     def __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
-                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict()):
+                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(), unit_conversion_dict = dict()):
 
 
         self.__imagej_filepath = imagej_filepath
@@ -177,6 +177,7 @@ class CellSegmentationTracker:
 
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
+        self.unit_conversion_dict = unit_conversion_dict
 
         self.__use_model = use_model
         self.__show_segmentation = show_segmentation
@@ -208,6 +209,14 @@ class CellSegmentationTracker:
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
              }
+        self.unit_conversion_default_values = {'pixel_witdh_in_physical_units': 1.0, 
+                                               'pixel_height_in_physical_units': 1.0,
+                                                  'frame_interval_in_physical_units': 1.0,
+                                                  'physical_length_unit_name': 'Pixels',
+                                                    'physical_time_unit_name': 'Frame',
+        }
+        
+
 
         self.__grid_dict = {'xmin': None, 'ymin': None, \
                           'xmax': None, 'ymax': None, \
@@ -222,6 +231,8 @@ class CellSegmentationTracker:
         self.__return_absolute_cell_counts = False
 
     #### Private methods ####
+
+    
 
     def __generate_title(self, feature):
         """
@@ -272,8 +283,13 @@ class CellSegmentationTracker:
         Modify cellpose source code to allow for modification of flow and cell probability threshold.
         """
         # Define paths to files to modify
-        paths_to_modify = [os.path.join(self.__cellpose_folder_path, name) for name in ['models.py', 'dynamics.py', 'cli.py']]
-
+        paths_to_modify = []
+        for name in  ['models.py', 'dynamics.py', 'cli.py']:
+            if os.path.isfile(os.path.join(self.__cellpose_folder_path, name)):
+                paths_to_modify.append(os.path.join(self.__cellpose_folder_path, name))
+            else:
+                continue
+  
         # Define search and replace strings
         search_strings = ["'--flow_threshold', default=0.4", "'--cellprob_threshold', default=0", \
                       'flow_threshold=0.4', 'cellprob_threshold=0.0',  \
@@ -958,9 +974,7 @@ class CellSegmentationTracker:
             plt.show()
         return
 
-
-
-    def get_density_fluctuations(self, Nwindows = 10, Ndof = 1):
+    def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 
         This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
@@ -979,15 +993,6 @@ class CellSegmentationTracker:
         window_sizes: array of window sizes
 
         """
-
-
-        # NOTES:
-         ## make it work for one frame
-        # make it work for several (avg over more frames --> av of fluctuations over frames
-        # make opt N or dens.
-        # make opt to average or not?
-
-
 
 
         # Extract relevant data from dataframe as array
@@ -1037,14 +1042,40 @@ class CellSegmentationTracker:
                 # Calculate  and store density
                 defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
 
-            # Step 4: Calculate average defect density (using a larger window size than max_window_size)
-            defects_in_window = len(distances[distances < max_window_size + avg_radius])
-            av_defect_densities[frame] = defects_in_window / (np.pi * (max_window_size + avg_radius)**2)
+
+        # Calculate average of average defect densities
+        if self.grid_df is None:
+            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
+            
+        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+        av_av_defect_densities = self.grid_df['number_density'].mean()
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+
+        print(av_defect_densities)
 
         # Calculate fluctuations of defect density
-        density_fluctuations = 1 / (Nwindows - 1) * np.sum((defect_densities - av_defect_densities[:, np.newaxis])**2)
-        return density_fluctuations, window_sizes
+        density_fluctuations = np.sqrt(np.mean((defect_densities - \
+                                        av_av_defect_densities)**2, axis = 0))
 
-    
+        if return_absolute_cell_counts:
+            return density_fluctuations * (np.pi * window_sizes**2), window_sizes, av_numbers
+        else:
+            return density_fluctuations, window_sizes, av_numbers
+
+  
    
+    def __unit_conversion(self):
+
+        # Extract pixel_width, pixel_height and timeinterval
+
+        root = et.fromstring(open(self.xml_path).read())
+
+        im_settings = root.find('Settings').find('ImageData') 
+        im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+        im_conversion_list = []
+
+        for  i, s in enumerate(im_settings_list):
+            im_conversion_list.append(s + f': {im_settings.get(s)}') 
+
+        print(im_conversion_list)
 

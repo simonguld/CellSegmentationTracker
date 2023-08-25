@@ -103,7 +103,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # make robust under color, multichannel etc?
 
 
-
 class CellSegmentationTracker:
 
     """
@@ -111,6 +110,10 @@ class CellSegmentationTracker:
 
     Parameters:
     ------------  
+    cellpose_folder_path: (str) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
+                                On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
+                                On MAC, it is typically found in 
+                                ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
     imagej_filepath: (str, default=None) - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder.
                      If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
     cellpose_python_filepath: (str, default=None) - The file path to the Cellpose Python program. 
@@ -201,8 +204,9 @@ class CellSegmentationTracker:
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
     """
 
-    def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
-                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict()):
+    def __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
+                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(), unit_conversion_dict = dict()):
+
 
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
@@ -215,8 +219,10 @@ class CellSegmentationTracker:
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
 
+        self.__cellpose_folder_path = cellpose_folder_path
+
         if self.__cellpose_python_filepath is not None:
-            self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
+            self.__cellpose_folder_path = cellpose_folder_path
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
@@ -238,6 +244,7 @@ class CellSegmentationTracker:
 
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
+        self.unit_conversion_dict = unit_conversion_dict
 
         self.__use_model = use_model
         self.__show_segmentation = show_segmentation
@@ -269,6 +276,14 @@ class CellSegmentationTracker:
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
              }
+        self.unit_conversion_default_values = {'pixel_witdh_in_physical_units': 1.0, 
+                                               'pixel_height_in_physical_units': 1.0,
+                                                  'frame_interval_in_physical_units': 1.0,
+                                                  'physical_length_unit_name': 'Pixels',
+                                                    'physical_time_unit_name': 'Frame',
+        }
+        
+
 
         self.__grid_dict = {'xmin': None, 'ymin': None, \
                           'xmax': None, 'ymax': None, \
@@ -283,6 +298,8 @@ class CellSegmentationTracker:
         self.__return_absolute_cell_counts = False
 
     #### Private methods ####
+
+    
 
     def __generate_title(self, feature):
         """
@@ -400,6 +417,9 @@ class CellSegmentationTracker:
         os.chdir(self.__fiji_folder_path)
         # Get name of executable
         executable = list(os.path.split(self.__imagej_filepath))[-1]
+        # add ./ for linux and mac
+        if platform.system() != 'Windows':
+            executable = './' + executable
         # Set path to jython script
         jython_path = os.path.join(self.__class_path, "jython_cellpose.py")
 
@@ -880,7 +900,7 @@ class CellSegmentationTracker:
                         if return_absolute_cell_counts:
                             density = mask.sum() 
                         else:
-                            density = mask.sum() / (self.__grid_dict['grid_len']**2)     
+                            denisty = mask.sum() / (self.__grid_dict['grid_len']**2)     
 
                         grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:8] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
                                                                 y + self.__grid_dict['grid_len'] / 2, density, vx, vy]
@@ -1088,15 +1108,14 @@ class CellSegmentationTracker:
         # Calculate average of average defect densities
         if self.grid_df is None:
             self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
-            av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-            av_av_defect_densities = self.grid_df['number_density'].mean()
-            av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+            
+        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+        av_av_defect_densities = self.grid_df['number_density'].mean()
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
 
         print(av_defect_densities)
 
         # Calculate fluctuations of defect density
-        density_fluctuations = np.sqrt(np.mean((defect_densities - \
-                                        av_av_defect_densities)**2, axis = 0))
         density_fluctuations = np.sqrt(np.mean((defect_densities - \
                                         av_av_defect_densities)**2, axis = 0))
 
@@ -1105,15 +1124,32 @@ class CellSegmentationTracker:
         else:
             return density_fluctuations, window_sizes, av_numbers
 
+    # include uncertainty in density
+    # std v variance
+    # make opt to average or not?
+    # include some kind of check eq. thingy
+
     
    
+    def unit_conversion(self):
+
+        # Extract pixel_width, pixel_height and time interval
+
+        root = et.fromstring(open(self.xml_path).read())
+
+        im_settings = root.find('Settings').find('ImageData') 
+        im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+        im_conversion_list = []
+
+        for  i, s in enumerate(im_settings_list):
+            im_conversion_list.append(float(im_settings.get(s)))
+
+        self.unit_conversion_dict = {'pixelwidth': im_conversion_list[0], 'pixelheight': im_conversion_list[1],\
+                                        'timeinterval': im_conversion_list[2]}
+
+        print(im_conversion_list)
 
 
- # compare av dens for grid og cirkel
-# include uncertainty in density
-# std v variance
-# make opt to average or not?
-# include some kind of check eq. thingy
 
 
 
@@ -1122,6 +1158,7 @@ def main():
     model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
     cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
+    cellpose_folder_path = "C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose"
 
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
     input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
@@ -1149,7 +1186,7 @@ def main():
     pn = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.'
 
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
+    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
                                 show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
     t1= time.time()
     #cst.run_segmentation_tracking()
@@ -1157,104 +1194,22 @@ def main():
     print("RUNTIME: ", (t2-t1)/60)
     #cst.generate_csv_files()
 
-#  cst.generate_csv_files()
-    cst.spots_df = pd.read_csv('./resources/epi2500_spots.csv')
+    cst.unit_conversion()
 
-    #cst.get_summary_statistics()
-    #cst.calculate_grid_statistics(Ngrid = 10, include_features=[], return_absolute_cell_counts=False, save_csv=False)
-
-   # nd_grid = cst.grid_df['number_density'].mean()
-
-    #print(nd_grid)
-    dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
-                                                                   return_absolute_cell_counts = True,)
-  #  nd_grid_no = nd_grid * (np.pi * windows**2)
-  #  print(np.sqrt(dens_fluc))
-    print(windows)
-    print(".....")
-    fig, ax = plt.subplots()
-    ax.plot(av_numbers, dens_fluc, 'r.')
-  #  ax.plot(nd_grid_no, dens_fluc, 'b.', label = 'nd grid')
-    ax.legend()
-    plt.show()
 
     if 0:
-        cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-
-        cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                                            animate = False, frame_interval = 800, show = True)
-        #plt.savefig(f'./resources/cell_number_heatmap_10x12_grid.png', dpi=420, transparent=False,)
+        dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
+                                                                    return_absolute_cell_counts = True,)
+        print(windows)
+        print(".....")
+        fig, ax = plt.subplots()
+        ax.plot(av_numbers, dens_fluc, 'r.')
+        ax.legend()
         plt.show()
 
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,0], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
+ 
 
-
-
-
-    if 0:
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = False)
-        
-        cst.plot_velocity_field(mode = 'field', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = True)
-
-        cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-    # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
-
-        #cst.plot_feature_over_time('Area')
-
-    if 0:
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [1,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [2,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-        print(grid_df.info())
-
-
-        
-        print("RUNTIME: ", (t2-t1)/60)
-
-    # cst.generate_csv_files(save_csv_files=False)
-        t3 = time.time()
-        print("CSV gen time: ", (t3-t2)/60)
-        
-    #   for col in cst.spots_df.columns:
-    #      cst.plot_feature_over_time(col)
-        #cst.run_segmentation_tracking()
-    
-    if 0:
-        print(cst.flow_threshold, cst.cellprob_threshold)
-
-        print(cst.spots_df.info()  )
-        print(cst.spots_df.describe())
-        print(cst.tracks_df.info())
-        print(cst.edges_df.info())
-
-
-
-        cst.save_csv()
-        cst.print_settings()
-        print("you made it bro")
+ 
 
 if __name__ == '__main__':
     main()
