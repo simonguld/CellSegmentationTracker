@@ -2,6 +2,7 @@ LICENSE
 README.md
 setup.py
 cellsegmentationtracker/CellSegmentationTracker.py
+cellsegmentationtracker/CellSegmentationTracker_dev.py
 cellsegmentationtracker/__init__.py
 cellsegmentationtracker/jython_cellpose.py
 cellsegmentationtracker/utils.py
