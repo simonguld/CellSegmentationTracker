@@ -150,11 +150,11 @@ _Example Image_
 </div>
 
 * Trained using the Cellpose model 'CYTO' as starting point
-* Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image, which are being slowly stretched
+* Trained on images of a monolayer of epithelial cells, with roughly 2500 cells per image
 * The bright white spots indicate an absence of cells and are not to be segmented
 * It has been trained so as not not segment cells at the image boundary (to avoid partial segmentations)
 * Images created using light microscopy (10 min. between frames)
-* Magnification: 25x
+* Magnification: 10x
 * Image size: 2005x1567 (1303.25x1018.55 microns)
 * Default paramters for this model:
     * FLOW_THRESHOLD = 0.6
