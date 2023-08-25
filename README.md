@@ -187,19 +187,22 @@ _Example Image_
 
 
 ```python
-class CellSegmentationTracker.CellSegmentationTracker(self, imagej_filepath, cellpose_python_filepath,
- image_folder_path = None, xml_path = None, output_folder_path = None, use_model = 'CYTO',
-custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {})
+class CellSegmentationTracker.CellSegmentationTracker(self, cellpose_folder_path, imagej_filepath = None,
+cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
+use_model = 'CYTO', custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {})
 ```
 
 
 ```python
- __init__(self, imagej_filepath, cellpose_python_filepath, image_folder_path = None, xml_path = None,
-output_folder_path = None, use_model = 'CYTO', custom_model_path = None, show_segmentation = False,
-cellpose_dict = {}, trackmate_dict = {})
+ __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None,
+image_folder_path = None, xml_path = None, output_folder_path = None, use_model = 'CYTO',
+custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {})
 ```
 
 #### **Parameters:**    
+- **cellpose_folder_path: (str)**
+  - The path to the folder containing the cellpose python package. It can be found in the virtual environment created for running cellpose. On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose.
+  On MAC, it is typically found in ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
 - **imagej_filepath: (str, default=None)**
   - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder. If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
 - **cellpose_python_filepath: (str, default=None)**
