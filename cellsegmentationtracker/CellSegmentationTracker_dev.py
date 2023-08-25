@@ -1016,8 +1016,6 @@ class CellSegmentationTracker:
             plt.show()
         return
 
-
-
     def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 

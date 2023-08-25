@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import time
+import platform
 import warnings
 from subprocess import Popen, PIPE
 
@@ -42,6 +43,10 @@ class CellSegmentationTracker:
 
     Parameters:
     ------------  
+    cellpose_folder_path: (str) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
+                                On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
+                                On MAC, it is typically found in 
+                                ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
     imagej_filepath: (str, default=None) - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder.
                      If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
     cellpose_python_filepath: (str, default=None) - The file path to the Cellpose Python program. 
@@ -334,6 +339,9 @@ class CellSegmentationTracker:
         os.chdir(self.__fiji_folder_path)
         # Get name of executable
         executable = list(os.path.split(self.__imagej_filepath))[-1]
+        # add ./ for linux and mac
+        if platform.system() != 'Windows':
+            executable = './' + executable
         # Set path to jython script
         jython_path = os.path.join(self.__class_path, "jython_cellpose.py")
 
