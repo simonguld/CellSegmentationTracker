@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import time
+import platform
 import warnings
 from subprocess import Popen, PIPE
 
@@ -350,8 +351,13 @@ class CellSegmentationTracker:
         Modify cellpose source code to allow for modification of flow and cell probability threshold.
         """
         # Define paths to files to modify
-        paths_to_modify = [os.path.join(self.__cellpose_folder_path, name) for name in ['models.py', 'dynamics.py', 'cli.py']]
-
+        paths_to_modify = []
+        for name in  ['models.py', 'dynamics.py', 'cli.py']:
+            if os.path.isfile(os.path.join(self.__cellpose_folder_path, name)):
+                paths_to_modify.append(os.path.join(self.__cellpose_folder_path, name))
+            else:
+                continue
+  
         # Define search and replace strings
         search_strings = ["'--flow_threshold', default=0.4", "'--cellprob_threshold', default=0", \
                       'flow_threshold=0.4', 'cellprob_threshold=0.0',  \
@@ -372,6 +378,7 @@ class CellSegmentationTracker:
                 search_and_modify_file(p, search_string, replace_string)
         print("Cellpose source code files have been modified to allow for modification of flow and cell probability threshold.")
         return
+
 
     def __generate_jython_dict(self):
         """
@@ -1130,22 +1137,67 @@ class CellSegmentationTracker:
     # include some kind of check eq. thingy
 
     
+
+
+    ## If pw,ph != 1: check om det er sat i dict og om de stemmer overens. eller error msg
+    
    
     def unit_conversion(self):
 
         # Extract pixel_width, pixel_height and time interval
+#        XML not None:
+
+#2) bruger giver name på units ingen tal --> trackmate values + add unit names
+#3) brguer giver alt, det passer med tm --> conv. time, add unit names
+#4) bruger giver alt, passer ikke med tm !=1: brug tm vals, conv time, add unit names
+#5) bruger giver alt, tm-vals er 1 --> conv alt, add unit names
+#XML None:
+#you're shit out of luck
+
 
         root = et.fromstring(open(self.xml_path).read())
 
         im_settings = root.find('Settings').find('ImageData') 
         im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+        dict_keys = ['pixel_width_in_physical_units', 'pixel_height_in_physical_units', 'frame_interval_in_physical_units']
         im_conversion_list = []
+
+        if self.unit_conversion_dict is None:
+            self.unit_conversion_dict = self.unit_conversion_default_values
 
         for  i, s in enumerate(im_settings_list):
             im_conversion_list.append(float(im_settings.get(s)))
 
+        for i, key in enumerate(dict_keys):
+            if self.unit_conversion_dict[key] is None:
+                self.unit_conversion_dict[key] = im_conversion_list[i]
+                print(f'\n{key} not provided. Using TrackMate value {im_conversion_list[i]} as {key} instead.')
+                
+                self.unit_conversion_dict['physical_length_unit_name'] = self.unit_conversion_dict['physical_length_unit_name'] if self.unit_conversion_dict['physical_length_unit_name'] 
+            else: 
+                if i < 2 and self.unit_conversion_dict['physical_length_unit_name'] is None:
+                    raise ValueError("You have provided physical lengths units but no unit name.")
+                elif i == 3 and self.unit_conversion_dict['physical_time_unit_name'] is None:
+                    raise ValueError("You have provided a physical time unit but no unit name.")
+                if self.unit_conversion_dict[key] != im_conversion_list[i] and im_conversion_list[i] != 1:
+                    print(f'\n{key} provided does not match TrackMate value  Using TrackMate value instead')
+                    self.unit_conversion_dict[key] = im_conversion_list[i]
+    
+
+
         self.unit_conversion_dict = {'pixelwidth': im_conversion_list[0], 'pixelheight': im_conversion_list[1],\
                                         'timeinterval': im_conversion_list[2]}
+
+
+     {'pixel_witdh_in_physical_units': 1.0, 
+                                               'pixel_height_in_physical_units': 1.0,
+                                                  'frame_interval_in_physical_units': 1.0,
+                                                  'physical_length_unit_name': 'Pixels',
+                                                    'physical_time_unit_name': 'Frame',
+        }
+        
+
+
 
         print(im_conversion_list)
 
