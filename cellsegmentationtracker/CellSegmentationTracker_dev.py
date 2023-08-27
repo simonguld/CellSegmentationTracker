@@ -245,8 +245,7 @@ class CellSegmentationTracker:
 
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
-        self.unit_conversion_dict = unit_conversion_dict
-
+       
         self.__use_model = use_model
         self.__show_segmentation = show_segmentation
         self.__jython_dict = {}
@@ -277,32 +276,29 @@ class CellSegmentationTracker:
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
              }
-        self.unit_conversion_default_values = {'pixel_witdh_in_physical_units': 1.0, 
-                                               'pixel_height_in_physical_units': 1.0,
-                                                  'frame_interval_in_physical_units': 1.0,
+        self.unit_conversion_default_values = {   'frame_interval_in_physical_units': 1.0,
                                                   'physical_length_unit_name': 'Pixels',
                                                     'physical_time_unit_name': 'Frame',
         }
         
-
+        self.unit_conversion_dict = self.unit_conversion_default_values if unit_conversion_dict == dict() else unit_conversion_dict
 
         self.__grid_dict = {'xmin': None, 'ymin': None, \
                           'xmax': None, 'ymax': None, \
                         'Nx': None, 'Ny': None, \
                             'grid_len': None, 'Nsquares': None, 
-                            'Lx': None, 'Ly': None
-                            }
+                            'Lx': None, 'Ly': None}
 
         self.__Nspots = None
         self.__Ntracks = None
         self.__Nframes = None
         self.__return_absolute_cell_counts = False
+        self.__convert_time_to_physical_units = False
 
     #### Private methods ####
-
     
 
-    def __generate_title(self, feature):
+    def __generate_title(self, feature, feature_unit = None):
         """
         Generate title for plots.
         """
@@ -311,9 +307,9 @@ class CellSegmentationTracker:
             return 'Cell number'
         else:
             if len(split_features) == 1:
-                return feature.capitalize()
+                return feature.capitalize() if feature_unit is None else feature.capitalize() + f" ({feature_unit})"
             else:
-                return split_features[1].capitalize()
+                return split_features[1].capitalize() if feature_unit is None else split_features[1].capitalize() + f" ({feature_unit})"
 
     def __prepare_images(self):
         """
@@ -378,7 +374,6 @@ class CellSegmentationTracker:
                 search_and_modify_file(p, search_string, replace_string)
         print("Cellpose source code files have been modified to allow for modification of flow and cell probability threshold.")
         return
-
 
     def __generate_jython_dict(self):
         """
@@ -525,7 +520,7 @@ class CellSegmentationTracker:
         self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
         return
     
-    def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None):
+    def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None, feature_unit = None):
         """
         Plots a heatmap of the given feature for a given frame.
         """  
@@ -536,8 +531,15 @@ class CellSegmentationTracker:
 
         ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax)
 
-        title = f'{self.__generate_title(feature)} heatmap for frame = {i}' if title is None else title
-        ax.set(xlabel = 'x', ylabel = 'y', title = title)
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = f'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
+        ax.set(xlabel = f"x ({self.unit_conversion_dict['physical_length_unit_name']})",\
+               ylabel = f"y ({self.unit_conversion_dict['physical_length_unit_name']})",  title = title)
+        
         ax.set_xticks(ticks = np.linspace(0.5,self.__grid_dict['Nx'] - 0.5, 4), labels=xticklabels)
         ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
         return
@@ -546,10 +548,17 @@ class CellSegmentationTracker:
         """
         Plot the velocity field for a given frame.
         """
-        title = f'Velocity field for frame = {i}' if title is None else title
+        unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]} {self.unit_conversion_dict["physical_time_unit_name"]}$^{-1}$)'
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = f'Velocity field {unit} {time_label}'
+
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
-        plt.xlabel(xlabel = 'x')
-        plt.ylabel(ylabel = 'y')
+        plt.xlabel(xlabel = f'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
+        plt.ylabel(ylabel = f'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
   
         return
@@ -558,7 +567,13 @@ class CellSegmentationTracker:
         """
         Plot the velocity streamlines for a given frame.
         """
-        title = f'Velocity streamlines for frame = {i}' if title is None else title
+        unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]} {self.unit_conversion_dict["physical_time_unit_name"]}$^{-1}$)'
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = f'Velocity field {unit} {time_label}'
 
         plt.streamplot(np.unique(X), np.unique(Y), np.flip(VX, axis = 0), np.flip(VY, axis = 0), density = 1.5, color = 'black', linewidth=1, arrowsize=1)
         plt.xlabel(xlabel = 'x')
@@ -725,9 +740,28 @@ class CellSegmentationTracker:
             print("\nStarting to generate csv files from xml file now. This may take a while... \
                   \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
                   
-
             self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
                                                             get_track_features = get_tracks, get_edge_features = get_edges)
+            print("Finished generating csv files from xml file.\n")
+
+            # Convert length and time to physical units, if necessary
+            self.__unit_conversion()
+            if self.__convert_time_to_physical_units:
+                # Features to convert
+                time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
+                inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
+                                        'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
+                                        'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+
+            for df in [self.spots_df, self.tracks_df, self.edges_df]:
+                for key in time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
+                for key in inverse_time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
+            print("Time unit conversion done.\n")
+            
         else:
             raise OSError("No xml file provided!")
         
@@ -818,7 +852,7 @@ class CellSegmentationTracker:
                 print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Ntracks:.3f}")
         return
 
-    def plot_feature_over_time(self, spot_feature = 'Area'):
+    def plot_feature_over_time(self, spot_feature = 'Radius', spot_feature_unit = None,):
         """
         Plots the average values of a feature over time.
         """
@@ -828,7 +862,8 @@ class CellSegmentationTracker:
                     self.spots_df.groupby('T')[spot_feature].mean(), \
                     self.spots_df.groupby('T')[spot_feature].std(ddof=1), fmt = 'k.',\
                           capsize = 5, capthick = 2, elinewidth = 2, ms = 5)
-        ax.set(xlabel = 'Time', ylabel = spot_feature, title = 'Average ' + spot_feature + ' over time')
+        ylabel = f'{spot_feature} ({spot_feature_unit})' if spot_feature_unit is not None else spot_feature
+        ax.set(xlabel = f"Time ({self.unit_conversion_dict['physical_time_unit_name']})", ylabel = ylabel, title = 'Average ' + spot_feature + ' over time')
         plt.show()
 
         return
@@ -924,7 +959,7 @@ class CellSegmentationTracker:
 
         return self.grid_df
 
-    def visualize_grid_statistics(self, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
+    def visualize_grid_statistics(self, feature = 'number_density', feature_unit = None, frame_range = [0,0], calculate_average = False, \
                              animate = True, frame_interval = 1200, show = True,):
         """
         Visualize the grid statistics (generated by the method calculate_grid_statistics) for a given feature 
@@ -966,10 +1001,10 @@ class CellSegmentationTracker:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     arr_T = np.nanmean(arr_T, axis = 0)
-                title=f'{self.__generate_title(feature)} heatmap av. of frames {frame_range[0]}:{frame_range[1]}'
+                title=f'{self.__generate_title(feature, feature_unit)} heatmap av. of frames {frame_range[0]}:{frame_range[1]}'
                 self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
             else:             
-                heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, feature, vmin, vmax,)
+                heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, feature, vmin, vmax, feature_unit)
                 if animate:
                     self.__animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
                 else:
@@ -1027,8 +1062,18 @@ class CellSegmentationTracker:
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
                 arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+
+            unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]} {self.unit_conversion_dict["physical_time_unit_name"]}$^{-1}$)'
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'averaged over frames {frame_range[0]}:{frame_range[1]}'
+            else:
+                t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                time_label = f'averged from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = f'Velocity field {unit} {time_label}'
             plotter(x_center, y_center, arr_vx, arr_vy, \
-                                title=f'Velocity {mode} averaged over frames {frame_range[0]}:{frame_range[1]}')         
+                                title=title)         
         else:  
             if animate:
                 anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, plotter,)
@@ -1136,73 +1181,44 @@ class CellSegmentationTracker:
     # make opt to average or not?
     # include some kind of check eq. thingy
 
-    
 
 
-    ## If pw,ph != 1: check om det er sat i dict og om de stemmer overens. eller error msg
-    
    
-    def unit_conversion(self):
+    def __unit_conversion(self):
+        """
+        Initialize unit conversion dictionary and store whether and how to convert 
+        units of physical quantities to physical units.
 
-        # Extract pixel_width, pixel_height and time interval
-#        XML not None:
-
-#2) bruger giver name på units ingen tal --> trackmate values + add unit names
-#3) brguer giver alt, det passer med tm --> conv. time, add unit names
-#4) bruger giver alt, passer ikke med tm !=1: brug tm vals, conv time, add unit names
-#5) bruger giver alt, tm-vals er 1 --> conv alt, add unit names
-#XML None:
-#you're shit out of luck
-
+        """
 
         root = et.fromstring(open(self.xml_path).read())
 
         im_settings = root.find('Settings').find('ImageData') 
         im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
-        dict_keys = ['pixel_width_in_physical_units', 'pixel_height_in_physical_units', 'frame_interval_in_physical_units']
+        dict_keys = ['frame_interval_in_physical_units']
+        dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
+        output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
         im_conversion_list = []
 
-        if self.unit_conversion_dict is None:
-            self.unit_conversion_dict = self.unit_conversion_default_values
-
+        print("\n")
         for  i, s in enumerate(im_settings_list):
             im_conversion_list.append(float(im_settings.get(s)))
+            print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
 
-        for i, key in enumerate(dict_keys):
-            if self.unit_conversion_dict[key] is None:
-                self.unit_conversion_dict[key] = im_conversion_list[i]
-                print(f'\n{key} not provided. Using TrackMate value {im_conversion_list[i]} as {key} instead.')
-                
-                self.unit_conversion_dict['physical_length_unit_name'] = self.unit_conversion_dict['physical_length_unit_name'] if self.unit_conversion_dict['physical_length_unit_name'] 
+        for key in dict_keys:
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = im_conversion_list[-1]
+                print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
             else: 
-                if i < 2 and self.unit_conversion_dict['physical_length_unit_name'] is None:
-                    raise ValueError("You have provided physical lengths units but no unit name.")
-                elif i == 3 and self.unit_conversion_dict['physical_time_unit_name'] is None:
-                    raise ValueError("You have provided a physical time unit but no unit name.")
-                if self.unit_conversion_dict[key] != im_conversion_list[i] and im_conversion_list[i] != 1:
-                    print(f'\n{key} provided does not match TrackMate value  Using TrackMate value instead')
-                    self.unit_conversion_dict[key] = im_conversion_list[i]
-    
-
-
-        self.unit_conversion_dict = {'pixelwidth': im_conversion_list[0], 'pixelheight': im_conversion_list[1],\
-                                        'timeinterval': im_conversion_list[2]}
-
-
-     {'pixel_witdh_in_physical_units': 1.0, 
-                                               'pixel_height_in_physical_units': 1.0,
-                                                  'frame_interval_in_physical_units': 1.0,
-                                                  'physical_length_unit_name': 'Pixels',
-                                                    'physical_time_unit_name': 'Frame',
-        }
-        
-
-
-
-        print(im_conversion_list)
-
-
-
+                if self.unit_conversion_dict[key] != im_conversion_list[-1]:
+                    if im_conversion_list[-1] == 1:
+                        self.__convert_time_to_physical_units
+                        print("\nUsing time unit conversion: Time between frames = ", \
+                              self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
+                    else:
+                        print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
+                        self.unit_conversion_dict[key] = im_conversion_list[-1]
+        return
 
 
 def main():
@@ -1237,16 +1253,24 @@ def main():
     image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
     pn = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.'
 
+    unit_conversion_dict= {
+                                                  'frame_interval_in_physical_units': 0.5,
+                                                  'physical_length_unit_name': 'Microns',
+                                                    'physical_time_unit_name': 'Minutes',
+        }
 
-    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
-                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
+    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, output_folder_path=output_directory, \
+                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
     t1= time.time()
     #cst.run_segmentation_tracking()
     t2= time.time()
     print("RUNTIME: ", (t2-t1)/60)
     #cst.generate_csv_files()
 
-    cst.unit_conversion()
+    cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+    
+    print(cst.unit_conversion_dict)
+    cst.plot_feature_over_time(spot_feature = 'Area', spot_feature_unit = r'$\mu m^2$')
 
 
     if 0:
