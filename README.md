@@ -311,6 +311,12 @@ Parameters:
 - **name : (str, default = None)**
     - name of csv files. If None, the name of the image file is used.
 
+
+Returns --> spots_df, tracks_df, edges_df:
+- **spots_df : (pandas DataFrame)** - Dataframe with spot features
+- **tracks_df : (pandas DataFrame)** - Dataframe with track features if get_tracks = True, else None
+- **edges_df : (pandas DataFrame)** - Dataframe with spot features if get_edges = True, else None
+
 ```python
 get_summary_statistics()
 ```
@@ -352,6 +358,10 @@ Parameters:
 - **name : (string, default = None)**
     - name of the csv file. If None, the name of the image file is used. It will be saved in the output_folder, if provided, 
                                      otherwise in the image folder
+
+
+Returns --> grid_df:
+- **grid_df : (pandas DataFrame)** - dataframe containing the grid statistics for each frame.
 
 
 ```python
