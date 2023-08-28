@@ -242,15 +242,18 @@ can be used for postprocess analysis
 ```NB```: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, which can lead to inaccurate velocity estimations.
 - **unit_conversion_dict: (dict, default=dict()**
   - A dictionary containing parameters with physical unit names as well as 
-                          the time_interval in physical units. Note that length scales are automatically converted to
+                          the time_interval in physical units. Note that length and time scales are automatically converted to
                           physical units by TrackMate if they are correctly provided in the .tif file. 
-                          It is not possible to make this conversion after running TrackMate, as features like e.g.
+                          It is not possible to make this conversion for lengths after running TrackMate, as features like e.g.
                           perimeter and circularity can, given an unequal rescaling of the x and y scales, only
                           be calculated if the actual spot contours are provided, which they are not in TrackMate. 
                           Parameters are:
       - frame_interval_in_physical_units (float, default = 1.0): The time interval between frames in physical units.
-      - physical_length_unit_name (str, default = 'pixels'): The name of the physical length unit.
-      - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit.
+      - physical_length_unit_name (str, default = 'pixels'): The time interval between frames in physical units.
+                                                                   If the .tif file does not contain this information, this parameter can be used to provide it.
+      - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit. If provided, plots etc. will be given in units of time as opposed to frames.
+
+
 
 **Attributes:**
 - **img_folder: (str)** - The path to the .tif input image folder containing, if provided
