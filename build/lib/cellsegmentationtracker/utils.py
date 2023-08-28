@@ -212,18 +212,23 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
                     'ID': 'Spot ID',
                     }
     
-    # Include only features in include_spot_features_list
-    if include_spot_features_list is not None:
-        del_list = []
-        for el in object_labels.keys():
-            if object_labels[el] not in include_spot_features_list:
-                del_list.append(el)
-        for el in del_list:
-            del object_labels[el]
-    object_labels.update(minimal_labels)
-
     spot_features = root.find('Model').find('FeatureDeclarations').find('SpotFeatures')
     spot_features = [c.get('feature') for c in list(spot_features)] + ['ID']
+
+    # Include only features in include_spot_features_list and in spot_features
+    del_list = []
+    for el in object_labels.keys():
+        try:
+            if object_labels[el] not in include_spot_features_list and include_spot_features_list:
+                del_list.append(el)
+        except:
+            pass
+      #  if object_labels[el] not in spot_features:
+       #     del_list.append(el)
+    for el in del_list:
+        del object_labels[el]
+    object_labels.update(minimal_labels)
+
 
     spots = root.find('Model').find('AllSpots')
     spot_objects = []
@@ -280,12 +285,12 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
         if get_track_features:
             single_object = []
             for feature in track_features:
-                single_object.append(track.get(feature))
+                single_object.append(track.get(feature))     
             track_objects.append(single_object)
 
         if get_edge_features:
             for edge in track.findall('Edge'):
-                single_object = []
+                single_object = [track.get("TRACK_ID")]
                 for label in edge_features:
                     single_object.append(edge.get(label))
                 edge_objects.append(single_object)
@@ -322,7 +327,10 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
             df_spots['Velocity_Y'].iloc[idx] = velocity_y
 
     if get_edge_features:
+        edge_features.insert(0, 'TRACK_ID')
         df_edges = pd.DataFrame(edge_objects, columns=edge_features).astype(float)
+        print(df_edges.info())
+        print(edge_features)
     if get_track_features:
         df_tracks = pd.DataFrame(track_objects, columns=track_features).astype(float)
 

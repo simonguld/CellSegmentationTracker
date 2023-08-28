@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import time
+import platform
 import warnings
 from subprocess import Popen, PIPE
 
@@ -26,7 +27,7 @@ sns.set_theme()
 sns.set_style("darkgrid")
 sns.set_context("paper") #Possible are paper, notebook, talk and poster
 
-d = {'lines.linewidth': 2, 'axes.titlesize': 18, 'axes.labelsize': 18, 'xtick.labelsize': 12, 'ytick.labelsize': 12,\
+d = {'lines.linewidth': 2, 'axes.titlesize': 16, 'axes.labelsize': 18, 'xtick.labelsize': 12, 'ytick.labelsize': 12,\
      'legend.fontsize': 15, 'font.family': 'serif', 'figure.figsize': (9,9)}
 d_colors = {'axes.prop_cycle': cycler(color = ['teal', 'navy', 'coral', 'plum', 'purple', 'olivedrab',\
          'black', 'red', 'cyan', 'yellow', 'khaki','lightblue'])}
@@ -103,7 +104,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # make robust under color, multichannel etc?
 
 
-
 class CellSegmentationTracker:
 
     """
@@ -111,6 +111,10 @@ class CellSegmentationTracker:
 
     Parameters:
     ------------  
+    cellpose_folder_path: (str) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
+                                On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
+                                On MAC, it is typically found in 
+                                ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
     imagej_filepath: (str, default=None) - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder.
                      If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
     cellpose_python_filepath: (str, default=None) - The file path to the Cellpose Python program. 
@@ -181,6 +185,17 @@ class CellSegmentationTracker:
         separating into several sub-tracks across time, like in cell division.      
     NB: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, 
         which can lead to inaccurate velocity estimations.
+    unit_conversion_dict: (dict, default=dict()) - A dictionary containing parameters with physical unit names as well as 
+                          the time_interval in physical units. Note that length scales are automatically converted to
+                          physical units by TrackMate if they are correctly provided in the .tif file. 
+                          It is not possible to make this conversion after running TrackMate, as features like e.g.
+                          perimeter and circularity can, given an unequal rescaling of the x and y scales, only
+                          be calculated if the actual spot contours are provided, which they are not in TrackMate. 
+                          Parameters are:
+        - frame_interval_in_physical_units (float, default = 1.0): The time interval between frames in physical units.
+        - physical_length_unit_name (str, default = 'pixels'): The name of the physical length unit.
+        - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit.
+
 
 
     Attributes:
@@ -201,8 +216,9 @@ class CellSegmentationTracker:
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
     """
 
-    def __init__(self, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
-                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict()):
+    def __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
+                  use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(), unit_conversion_dict = dict()):
+
 
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
@@ -215,8 +231,10 @@ class CellSegmentationTracker:
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
 
+        self.__cellpose_folder_path = cellpose_folder_path
+
         if self.__cellpose_python_filepath is not None:
-            self.__cellpose_folder_path = os.path.join(os.path.dirname(self.__cellpose_python_filepath), 'Lib', 'site-packages', 'cellpose')
+            self.__cellpose_folder_path = cellpose_folder_path
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
@@ -238,7 +256,7 @@ class CellSegmentationTracker:
 
         self.cellpose_dict = cellpose_dict
         self.trackmate_dict = trackmate_dict
-
+       
         self.__use_model = use_model
         self.__show_segmentation = show_segmentation
         self.__jython_dict = {}
@@ -269,33 +287,43 @@ class CellSegmentationTracker:
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
              }
+        self.unit_conversion_default_values = {   'frame_interval_in_physical_units': 1.0,
+                                                  'physical_length_unit_name': 'pixels',
+                                                    'physical_time_unit_name': 'frame',
+        }
+        
+        self.unit_conversion_dict = self.unit_conversion_default_values if unit_conversion_dict == dict() else unit_conversion_dict
 
         self.__grid_dict = {'xmin': None, 'ymin': None, \
                           'xmax': None, 'ymax': None, \
                         'Nx': None, 'Ny': None, \
                             'grid_len': None, 'Nsquares': None, 
-                            'Lx': None, 'Ly': None
-                            }
+                            'Lx': None, 'Ly': None}
 
         self.__Nspots = None
         self.__Ntracks = None
         self.__Nframes = None
         self.__return_absolute_cell_counts = False
+        self.__convert_time_to_physical_units = False
+
 
     #### Private methods ####
+    
 
-    def __generate_title(self, feature):
+    def __generate_title(self, feature, feature_unit = None):
         """
         Generate title for plots.
         """
         split_features = feature.split('_')
-        if feature == 'number_density' and self.__return_absolute_cell_counts:
-            return 'Cell number'
+        if feature == 'number_density':
+            if self.__return_absolute_cell_counts:
+                return 'Cell number'
+            else: return 'Number density' if feature_unit is None else 'Number density' + rf" ({feature_unit})"
         else:
             if len(split_features) == 1:
-                return feature.capitalize()
+                return feature.capitalize() if feature_unit is None else feature.capitalize() + rf" ({feature_unit})"
             else:
-                return split_features[1].capitalize()
+                return split_features[1].capitalize() if feature_unit is None else split_features[1].capitalize() + rf" ({feature_unit})"
 
     def __prepare_images(self):
         """
@@ -333,8 +361,13 @@ class CellSegmentationTracker:
         Modify cellpose source code to allow for modification of flow and cell probability threshold.
         """
         # Define paths to files to modify
-        paths_to_modify = [os.path.join(self.__cellpose_folder_path, name) for name in ['models.py', 'dynamics.py', 'cli.py']]
-
+        paths_to_modify = []
+        for name in  ['models.py', 'dynamics.py', 'cli.py']:
+            if os.path.isfile(os.path.join(self.__cellpose_folder_path, name)):
+                paths_to_modify.append(os.path.join(self.__cellpose_folder_path, name))
+            else:
+                continue
+  
         # Define search and replace strings
         search_strings = ["'--flow_threshold', default=0.4", "'--cellprob_threshold', default=0", \
                       'flow_threshold=0.4', 'cellprob_threshold=0.0',  \
@@ -400,6 +433,9 @@ class CellSegmentationTracker:
         os.chdir(self.__fiji_folder_path)
         # Get name of executable
         executable = list(os.path.split(self.__imagej_filepath))[-1]
+        # add ./ for linux and mac
+        if platform.system() != 'Windows':
+            executable = './' + executable
         # Set path to jython script
         jython_path = os.path.join(self.__class_path, "jython_cellpose.py")
 
@@ -432,6 +468,42 @@ class CellSegmentationTracker:
         os.chdir(self.__working_dir)    
         return
     
+    def __unit_conversion(self):
+        """
+        Initialize unit conversion dictionary and store whether and how to convert 
+        units of physical quantities to physical units.
+
+        """
+
+        root = et.fromstring(open(self.xml_path).read())
+
+        im_settings = root.find('Settings').find('ImageData') 
+        im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+        dict_keys = ['frame_interval_in_physical_units']
+        dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
+        output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
+        im_conversion_list = []
+
+        print("\n")
+        for  i, s in enumerate(im_settings_list):
+            im_conversion_list.append(float(im_settings.get(s)))
+            print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
+
+        for key in dict_keys:
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = im_conversion_list[-1]
+                print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
+            else: 
+                if self.unit_conversion_dict[key] != im_conversion_list[-1]:
+                    if im_conversion_list[-1] == 1:
+                        self.__convert_time_to_physical_units = True
+                        print("\nUsing time unit conversion: Time between frames = ", \
+                              self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
+                    else:
+                        print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
+                        self.unit_conversion_dict[key] = im_conversion_list[-1]
+        return
+
     def __save_csv(self, name = None):
         """
         Save csv files to output folder.
@@ -498,19 +570,26 @@ class CellSegmentationTracker:
         self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
         return
     
-    def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None):
+    def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None, feature_unit = None):
         """
         Plots a heatmap of the given feature for a given frame.
         """  
         arr_grid = frame.reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
 
-        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2, 2) 
-        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2, 2)
+        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
+        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
 
-        ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax)
+        ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax,)
 
-        title = f'{self.__generate_title(feature)} heatmap for frame = {i}' if title is None else title
-        ax.set(xlabel = 'x', ylabel = 'y', title = title)
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at t = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = rf'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
+        ax.set(xlabel = rf"x ({self.unit_conversion_dict['physical_length_unit_name']})",\
+               ylabel = rf"y ({self.unit_conversion_dict['physical_length_unit_name']})",  title = title)
+        
         ax.set_xticks(ticks = np.linspace(0.5,self.__grid_dict['Nx'] - 0.5, 4), labels=xticklabels)
         ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
         return
@@ -519,10 +598,17 @@ class CellSegmentationTracker:
         """
         Plot the velocity field for a given frame.
         """
-        title = f'Velocity field for frame = {i}' if title is None else title
+        unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = rf'Velocity field {unit} {time_label}'
+
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
-        plt.xlabel(xlabel = 'x')
-        plt.ylabel(ylabel = 'y')
+        plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
+        plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
   
         return
@@ -531,11 +617,17 @@ class CellSegmentationTracker:
         """
         Plot the velocity streamlines for a given frame.
         """
-        title = f'Velocity streamlines for frame = {i}' if title is None else title
+        unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
+        if title is None:
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'for frame = {i}'
+            else:
+                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = rf'Velocity field {unit} {time_label}'
 
         plt.streamplot(np.unique(X), np.unique(Y), np.flip(VX, axis = 0), np.flip(VY, axis = 0), density = 1.5, color = 'black', linewidth=1, arrowsize=1)
-        plt.xlabel(xlabel = 'x')
-        plt.ylabel(ylabel = 'y')
+        plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
+        plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
         return
 
@@ -694,13 +786,34 @@ class CellSegmentationTracker:
 
 
         """
+
+
         if self.xml_path is not None:
             print("\nStarting to generate csv files from xml file now. This may take a while... \
                   \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
                   
-
             self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
                                                             get_track_features = get_tracks, get_edge_features = get_edges)
+            print("Finished generating csv files from xml file.\n")
+
+            # Convert length and time to physical units, if necessary
+            self.__unit_conversion()
+            if self.__convert_time_to_physical_units:
+                # Features to convert
+                time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
+                inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
+                                        'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
+                                        'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+
+                for df in [self.spots_df, self.tracks_df, self.edges_df]:
+                    for key in time_keys:
+                        if key in df.columns:
+                            df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
+                    for key in inverse_time_keys:
+                        if key in df.columns:
+                            df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
+                print("Time unit conversion done.\n")
+            
         else:
             raise OSError("No xml file provided!")
         
@@ -791,9 +904,14 @@ class CellSegmentationTracker:
                 print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Ntracks:.3f}")
         return
 
-    def plot_feature_over_time(self, spot_feature = 'Area'):
+    def plot_feature_over_time(self, spot_feature = 'Area', spot_feature_unit = None,):
         """
         Plots the average values of a feature over time.
+
+        Parameters:
+        -----------
+        spot_feature : (str, default = 'Radius') - feature to plot over time
+        spot_feature_unit : (str, default = None) - unit of the feature to plot over time.
         """
 
         fig, ax = plt.subplots()
@@ -801,7 +919,8 @@ class CellSegmentationTracker:
                     self.spots_df.groupby('T')[spot_feature].mean(), \
                     self.spots_df.groupby('T')[spot_feature].std(ddof=1), fmt = 'k.',\
                           capsize = 5, capthick = 2, elinewidth = 2, ms = 5)
-        ax.set(xlabel = 'Time', ylabel = spot_feature, title = 'Average ' + spot_feature + ' over time')
+        ylabel = f'{spot_feature} ({spot_feature_unit})' if spot_feature_unit is not None else spot_feature
+        ax.set(xlabel = f"Time ({self.unit_conversion_dict['physical_time_unit_name']})", ylabel = ylabel, title = 'Average ' + spot_feature + ' over time')
         plt.show()
 
         return
@@ -897,7 +1016,7 @@ class CellSegmentationTracker:
 
         return self.grid_df
 
-    def visualize_grid_statistics(self, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
+    def visualize_grid_statistics(self, feature = 'number_density', feature_unit = None, frame_range = [0,0], calculate_average = False, \
                              animate = True, frame_interval = 1200, show = True,):
         """
         Visualize the grid statistics (generated by the method calculate_grid_statistics) for a given feature 
@@ -907,6 +1026,7 @@ class CellSegmentationTracker:
         -----------
         feature : (string, default = 'number_density') - feature to visualize. Must be a column of the grid dataframe \
                   generated by the method calculate_grid_statistics.
+        feature_unit : (string, default = None) - unit of the feature to visualize. If None, no unit is displayed.
         frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
                       If [0,0], all frames are visualized.
         calculate_average : (bool, default=False) - if True, the average heatmap over the given frame range 
@@ -939,10 +1059,19 @@ class CellSegmentationTracker:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     arr_T = np.nanmean(arr_T, axis = 0)
-                title=f'{self.__generate_title(feature)} heatmap av. of frames {frame_range[0]}:{frame_range[1]}'
-                self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
+        
+                if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                    time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
+                else:
+                    t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                    t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                    time_label = rf'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
+
+
+                    title=rf'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
+                    self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
             else:             
-                heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, feature, vmin, vmax,)
+                heatmap_plotter_res = lambda i, frame : self.__heatmap_plotter(i, frame, feature, vmin, vmax, feature_unit = feature_unit)
                 if animate:
                     self.__animator(data, heatmap_plotter_res, (frame_range[0],frame_range[1]), inter=frame_interval, show=show)
                 else:
@@ -1000,8 +1129,18 @@ class CellSegmentationTracker:
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
                 arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+
+            unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
+
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
+            else:
+                t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
+                time_label = f'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
+            title = rf'Velocity field {unit} {time_label}'
             plotter(x_center, y_center, arr_vx, arr_vy, \
-                                title=f'Velocity {mode} averaged over frames {frame_range[0]}:{frame_range[1]}')         
+                                title=title)         
         else:  
             if animate:
                 anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, plotter,)
@@ -1015,8 +1154,6 @@ class CellSegmentationTracker:
         if show:
             plt.show()
         return
-
-
 
     def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
         """
@@ -1090,15 +1227,14 @@ class CellSegmentationTracker:
         # Calculate average of average defect densities
         if self.grid_df is None:
             self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
-            av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-            av_av_defect_densities = self.grid_df['number_density'].mean()
-            av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+            
+        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+        av_av_defect_densities = self.grid_df['number_density'].mean()
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
 
         print(av_defect_densities)
 
         # Calculate fluctuations of defect density
-        density_fluctuations = np.sqrt(np.mean((defect_densities - \
-                                        av_av_defect_densities)**2, axis = 0))
         density_fluctuations = np.sqrt(np.mean((defect_densities - \
                                         av_av_defect_densities)**2, axis = 0))
 
@@ -1107,23 +1243,22 @@ class CellSegmentationTracker:
         else:
             return density_fluctuations, window_sizes, av_numbers
 
-    
+    # include uncertainty in density
+    # std v variance
+    # make opt to average or not?
+    # include some kind of check eq. thingy
+
+
+
    
-
-
- # compare av dens for grid og cirkel
-# include uncertainty in density
-# std v variance
-# make opt to average or not?
-# include some kind of check eq. thingy
-
-
+    
 
 def main():
     
     model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
     cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
+    cellpose_folder_path = "C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose"
 
     image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
     input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
@@ -1150,113 +1285,44 @@ def main():
     image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
     pn = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.'
 
+    unit_conversion_dict= {
+                                                  'frame_interval_in_physical_units': 5,
+                                                  'physical_length_unit_name': r'$\mu$m',
+                                                    'physical_time_unit_name': 'min',
+        }
 
-    cst = CellSegmentationTracker(imj_path, cellpose_python_filepath, pn, output_folder_path=output_directory, \
-                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500',)
+    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, image_path, output_folder_path=output_directory, \
+                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
     t1= time.time()
-    #cst.run_segmentation_tracking()
+    cst.run_segmentation_tracking()
     t2= time.time()
-    print("RUNTIME: ", (t2-t1)/60)
-    #cst.generate_csv_files()
+    print("RUNTIME: ", np.round(t2-t1))
+    cst.generate_csv_files()
 
-#  cst.generate_csv_files()
-    cst.spots_df = pd.read_csv('./resources/epi2500_spots.csv')
-
-    #cst.get_summary_statistics()
-    #cst.calculate_grid_statistics(Ngrid = 10, include_features=[], return_absolute_cell_counts=False, save_csv=False)
-
-   # nd_grid = cst.grid_df['number_density'].mean()
-
-    #print(nd_grid)
-    dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
-                                                                   return_absolute_cell_counts = True,)
-  #  nd_grid_no = nd_grid * (np.pi * windows**2)
-  #  print(np.sqrt(dens_fluc))
-    print(windows)
-    print(".....")
-    fig, ax = plt.subplots()
-    ax.plot(av_numbers, dens_fluc, 'r.')
-  #  ax.plot(nd_grid_no, dens_fluc, 'b.', label = 'nd grid')
-    ax.legend()
-    plt.show()
+    
 
     if 0:
-        cst.calculate_grid_statistics(Ngrid = 10, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
 
-        cst.visualize_grid_statistics(feature = 'number_density', frame_range = [0,0], calculate_average = False, \
-                                            animate = False, frame_interval = 800, show = True)
-        #plt.savefig(f'./resources/cell_number_heatmap_10x12_grid.png', dpi=420, transparent=False,)
+        cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+        cst.plot_feature_over_time(spot_feature = 'Radius', spot_feature_unit = r'$\mu$m')
+        cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'], return_absolute_cell_counts = True)
+        
+        print(cst.unit_conversion_dict)
+        cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,3], calculate_average = True, \
+                                animate = False, frame_interval = 1200, show = True)
+
+        dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
+                                                                    return_absolute_cell_counts = True,)
+        print(windows)
+        print(".....")
+        fig, ax = plt.subplots()
+        ax.plot(av_numbers, dens_fluc, 'r.')
+        ax.legend()
         plt.show()
 
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,0], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
+ 
 
-
-
-
-    if 0:
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-
-
-        grid_df = cst.calculate_grid_statistics(Ngrid = 4, include_features=['Area'], return_absolute_cell_counts=True, save_csv=False)
-    
-
-
-
-        cst.plot_velocity_field(mode = 'streamlines', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = False)
-        
-        cst.plot_velocity_field(mode = 'field', frame_range = [2,4], calculate_average = False, \
-                                    animate = False, frame_interval = 800, show = True)
-
-        cst.visualize_grid_statistics(feature = 'dick', frame_range = [0,5], calculate_average = False, \
-                                        animate = True, frame_interval = 800, show = True)
-
-    # grid_df = cst.calculate_grid_statistics(Ngrid = 25, return_absolute_cell_counts=True, save_csv=False)
-
-        #cst.plot_feature_over_time('Area')
-
-    if 0:
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [1,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-        cst.visualize_grid_statistics(feature = 'area', frame_range = [2,2], calculate_average = False, \
-                                    animate = True, frame_interval = 800, show = True)
-
-        print(grid_df.info())
-
-
-        
-        print("RUNTIME: ", (t2-t1)/60)
-
-    # cst.generate_csv_files(save_csv_files=False)
-        t3 = time.time()
-        print("CSV gen time: ", (t3-t2)/60)
-        
-    #   for col in cst.spots_df.columns:
-    #      cst.plot_feature_over_time(col)
-        #cst.run_segmentation_tracking()
-    
-    if 0:
-        print(cst.flow_threshold, cst.cellprob_threshold)
-
-        print(cst.spots_df.info()  )
-        print(cst.spots_df.describe())
-        print(cst.tracks_df.info())
-        print(cst.edges_df.info())
-
-
-
-        cst.save_csv()
-        cst.print_settings()
-        print("you made it bro")
+ 
 
 if __name__ == '__main__':
     main()

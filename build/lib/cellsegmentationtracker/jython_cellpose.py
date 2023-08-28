@@ -2,20 +2,28 @@ from fiji.plugin.trackmate import Model
 from fiji.plugin.trackmate import Settings
 from fiji.plugin.trackmate import TrackMate
 from fiji.plugin.trackmate import Logger
+from fiji.plugin.trackmate import SelectionModel
 from fiji.plugin.trackmate.io import TmXmlWriter
-from fiji.plugin.trackmate.util import LogRecorder;
+from fiji.plugin.trackmate.util import LogRecorder, TMUtils
 from fiji.plugin.trackmate.tracking.jaqaman import SparseLAPTrackerFactory
 
-from fiji.plugin.trackmate.util import TMUtils
+
 from fiji.plugin.trackmate.visualization.hyperstack import HyperStackDisplayer
-from fiji.plugin.trackmate import SelectionModel
-from fiji.plugin.trackmate.cellpose import CellposeDetectorFactory
+
+
 import fiji.plugin.trackmate.features.FeatureFilter as FeatureFilter
-from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
-from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings
-from fiji.plugin.trackmate.gui.displaysettings import DisplaySettingsIO
+from fiji.plugin.trackmate.gui.displaysettings import DisplaySettings, DisplaySettingsIO
+
+
 from fiji.plugin.trackmate.action import CaptureOverlayAction
 from fiji.plugin.trackmate.cellpose.CellposeSettings import PretrainedModel
+from fiji.plugin.trackmate.cellpose import CellposeDetectorFactory
+
+from fiji.plugin.trackmate.features.spot import SpotContrastAndSNRAnalyzerFactory, SpotAnalyzerFactory, \
+    SpotFitEllipseAnalyzerFactory, SpotIntensityMultiCAnalyzerFactory, SpotMorphologyAnalyzerFactory, SpotShapeAnalyzerFactory, AbstractSpotFeatureAnalyzer
+from fiji.plugin.trackmate.features.edges import EdgeSpeedAnalyzer, AbstractEdgeAnalyzer, DirectionalChangeAnalyzer, EdgeTargetAnalyzer, EdgeTimeLocationAnalyzer, EdgeAnalyzer
+from fiji.plugin.trackmate.features.track import TrackDurationAnalyzer, TrackAnalyzer, TrackIndexAnalyzer, \
+    TrackLocationAnalyzer, TrackSpeedStatisticsAnalyzer, TrackSpotQualityFeatureAnalyzer, AbstractTrackAnalyzer, TrackBranchingAnalyzer, TrackMotilityAnalyzer
 
 from ij import IJ
 
@@ -103,9 +111,18 @@ settings.trackerSettings['MAX_FRAME_GAP'] = trackmate_dict['MAX_FRAME_GAP']
 settings.trackerSettings['ALLOW_TRACK_SPLITTING'] = trackmate_dict['ALLOW_TRACK_SPLITTING']
 settings.trackerSettings['ALLOW_TRACK_MERGING'] = trackmate_dict['ALLOW_TRACK_MERGING']
 
-# Analyzers 
-settings.addAllAnalyzers()
+if 0:
+        # Analyzers 
+        spot_analyzers = [  SpotShapeAnalyzerFactory, SpotIntensityMultiCAnalyzerFactory] #,  SpotContrastAndSNRAnalyzerFactory] # SpotContrastAndSNRAnalyzerFactory SpotFitEllipseAnalyzerFactory,SpotIntensityMultiCAnalyzerFactory,
+        edge_analyzers =[ EdgeSpeedAnalyzer,  EdgeTargetAnalyzer, EdgeTimeLocationAnalyzer, DirectionalChangeAnalyzer] #DirectionalChangeAnalyzer,  AbstractEdgeAnalyzerAbstractEdgeAnalyzer
+        track_analyzers = [ TrackDurationAnalyzer, TrackIndexAnalyzer, TrackLocationAnalyzer, \
+                        TrackSpotQualityFeatureAnalyzer, TrackBranchingAnalyzer, TrackMotilityAnalyzer]#, TrackSpeedStatisticsAnalyzer] #AbstractTrackAnalyzer
 
+        for spot_analyzer, edge_analyzer, track_analyzer in zip(spot_analyzers, edge_analyzers, track_analyzers):
+                settings.addSpotAnalyzerFactory(spot_analyzer())
+                settings.addEdgeAnalyzer(edge_analyzer())
+                settings.addTrackAnalyzer(track_analyzer())
+settings.addAllAnalyzers()
 
 #-------------------
 # Instantiate plugin
