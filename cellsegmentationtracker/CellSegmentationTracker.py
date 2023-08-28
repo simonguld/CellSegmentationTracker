@@ -452,7 +452,7 @@ class CellSegmentationTracker:
                 name = os.path.basename(self.__img_path).strip(".tif")
             except:
                 name = 'CellSegmentationTracker'
-
+        print("\n")
         if self.spots_df is not None:
             path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
             self.spots_df.to_csv(path_out_spots, index = False) 
