@@ -1,6 +1,17 @@
 ## Author: Simon Guldager Andersen
 ## Date (latest update): 2023-08-24
 
+
+### -----------------------------------------------------------------
+
+# This is a script for developing and extending the CellSegmentationTracker module
+# It is not meant to be used by the user, but rather to be used by the developer
+
+### -----------------------------------------------------------------
+
+
+
+
 ## Imports:
 import os
 import sys
@@ -43,11 +54,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 # TODO i prioriteret rækkefølge:::
 
-# 1) TEST: Prøv modeller af epi6000.
-
-
-# If much time, start with:
-# 2) Impl. grid analysis, incl saving and plotting
 ### document
 # 3) Impl. density fluctuations
 # --> (inkl fix impl.) 
@@ -74,15 +80,11 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 # let frame --> t
 
 ### HANDLING UNITS:
-# input pixel_height=physical unit, pixel_width=physical unit, frame_interval=physical unit
-# CHECK XML TO see if time and lengths are provided. otherwise print info message
-# ALSO possbily allow entering physical units
-# NBNBNB: Velocities depend on it!
+# Done!
 
 ### ATTRIBUTES
 # allow for user providing csvs????
 # make a print all features method
-# possibly extend grid analysis to include all features
 
 ### VISUALIZATION
 # SPEND A LITTLE TIME ON:
@@ -97,9 +99,6 @@ np.set_printoptions(precision = 5, suppress=1e-10)
 
 
 ## NONESSENTIAL (IF TIME)
-# include the resize/splitting stuff (Resizing must preserve rel. proportions. ALSO: alters the observables. Take into account)
-# train nuclei data. NB: 1 bad img
-# make naming of xml and csv files more flexible
 # make roubst under other image formats?
 # make robust under color, multichannel etc?
 
