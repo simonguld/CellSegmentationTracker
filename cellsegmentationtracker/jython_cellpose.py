@@ -111,17 +111,7 @@ settings.trackerSettings['MAX_FRAME_GAP'] = trackmate_dict['MAX_FRAME_GAP']
 settings.trackerSettings['ALLOW_TRACK_SPLITTING'] = trackmate_dict['ALLOW_TRACK_SPLITTING']
 settings.trackerSettings['ALLOW_TRACK_MERGING'] = trackmate_dict['ALLOW_TRACK_MERGING']
 
-if 0:
-        # Analyzers 
-        spot_analyzers = [  SpotShapeAnalyzerFactory, SpotIntensityMultiCAnalyzerFactory] #,  SpotContrastAndSNRAnalyzerFactory] # SpotContrastAndSNRAnalyzerFactory SpotFitEllipseAnalyzerFactory,SpotIntensityMultiCAnalyzerFactory,
-        edge_analyzers =[ EdgeSpeedAnalyzer,  EdgeTargetAnalyzer, EdgeTimeLocationAnalyzer, DirectionalChangeAnalyzer] #DirectionalChangeAnalyzer,  AbstractEdgeAnalyzerAbstractEdgeAnalyzer
-        track_analyzers = [ TrackDurationAnalyzer, TrackIndexAnalyzer, TrackLocationAnalyzer, \
-                        TrackSpotQualityFeatureAnalyzer, TrackBranchingAnalyzer, TrackMotilityAnalyzer]#, TrackSpeedStatisticsAnalyzer] #AbstractTrackAnalyzer
-
-        for spot_analyzer, edge_analyzer, track_analyzer in zip(spot_analyzers, edge_analyzers, track_analyzers):
-                settings.addSpotAnalyzerFactory(spot_analyzer())
-                settings.addEdgeAnalyzer(edge_analyzer())
-                settings.addTrackAnalyzer(track_analyzer())
+# Add all analyzers.
 settings.addAllAnalyzers()
 
 #-------------------

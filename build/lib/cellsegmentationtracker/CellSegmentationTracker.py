@@ -118,15 +118,18 @@ class CellSegmentationTracker:
     NB: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, 
         which can lead to inaccurate velocity estimations.
     unit_conversion_dict: (dict, default=dict()) - A dictionary containing parameters with physical unit names as well as 
-                          the time_interval in physical units. Note that length scales are automatically converted to
+                          the time_interval in physical units. Note that length and time scales are automatically converted to
                           physical units by TrackMate if they are correctly provided in the .tif file. 
-                          It is not possible to make this conversion after running TrackMate, as features like e.g.
+                          It is not possible to make this conversion for lengths after running TrackMate, as features like e.g.
                           perimeter and circularity can, given an unequal rescaling of the x and y scales, only
                           be calculated if the actual spot contours are provided, which they are not in TrackMate. 
                           Parameters are:
         - frame_interval_in_physical_units (float, default = 1.0): The time interval between frames in physical units.
+                                                                   If the .tif file does not contain this information,
+                                                                   this parameter can be used to provide it.
         - physical_length_unit_name (str, default = 'pixels'): The name of the physical length unit.
-        - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit.
+        - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit. If provided, plots etc.
+                                                            will be given in units of time as opposed to frames.
 
 
 
@@ -235,7 +238,6 @@ class CellSegmentationTracker:
         self.__Nspots = None
         self.__Ntracks = None
         self.__Nframes = None
-        self.__return_absolute_cell_counts = False
         self.__convert_time_to_physical_units = False
 
 
@@ -247,10 +249,10 @@ class CellSegmentationTracker:
         Generate title for plots.
         """
         split_features = feature.split('_')
-        if feature == 'number_density':
-            if self.__return_absolute_cell_counts:
-                return 'Cell number'
-            else: return 'Number density' if feature_unit is None else 'Number density' + rf" ({feature_unit})"
+        if feature == 'cell_number':
+            return 'Cell number'
+        elif feature == 'number_density':
+            return 'Number density' if feature_unit is None else 'Number density' + rf" ({feature_unit})"
         else:
             if len(split_features) == 1:
                 return feature.capitalize() if feature_unit is None else feature.capitalize() + rf" ({feature_unit})"
@@ -433,7 +435,7 @@ class CellSegmentationTracker:
                               self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
                     else:
                         print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
-                        self.unit_conversion_dict[key] = im_conversion_list[-1]
+                        self.unit_conversion_dict[key] = im_conversion_list[-1]         
         return
 
     def __save_csv(self, name = None):
@@ -517,7 +519,7 @@ class CellSegmentationTracker:
             if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
                 time_label = f'for frame = {i}'
             else:
-                time_label = f'at t = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+                time_label = f'at t = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
         ax.set(xlabel = rf"x ({self.unit_conversion_dict['physical_length_unit_name']})",\
                ylabel = rf"y ({self.unit_conversion_dict['physical_length_unit_name']})",  title = title)
@@ -535,7 +537,7 @@ class CellSegmentationTracker:
             if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
                 time_label = f'for frame = {i}'
             else:
-                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+                time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
 
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
@@ -554,7 +556,7 @@ class CellSegmentationTracker:
             if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
                 time_label = f'for frame = {i}'
             else:
-                time_label = f'at time = {i * self.unit_conversion_dict["frame_interval_in_physical_units"]} {self.unit_conversion_dict["physical_time_unit_name"]}'
+                time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"],1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
 
         plt.streamplot(np.unique(X), np.unique(Y), np.flip(VX, axis = 0), np.flip(VY, axis = 0), density = 1.5, color = 'black', linewidth=1, arrowsize=1)
@@ -715,7 +717,11 @@ class CellSegmentationTracker:
         get_edges : (bool, default = True) - whether to generate a dataframe with edge features
         save_csv_files : (bool, default = True) - whether to save the csv files to the output folder
         name : (str, default = None) - name of csv files. If None, the name of the image file is used.
-
+        Returns:
+        --------
+        spots_df : (pandas dataframe) - dataframe with spot features
+        tracks_df : (pandas dataframe) - dataframe with track features if get_tracks = True, else None
+        edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
 
         """
 
@@ -745,7 +751,6 @@ class CellSegmentationTracker:
                         if key in df.columns:
                             df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
                 print("Time unit conversion done.\n")
-            
         else:
             raise OSError("No xml file provided!")
         
@@ -836,14 +841,14 @@ class CellSegmentationTracker:
                 print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Ntracks:.3f}")
         return
 
-    def plot_feature_over_time(self, spot_feature = 'Area', spot_feature_unit = None,):
+    def plot_feature_over_time(self, spot_feature = 'Area', feature_unit = None,):
         """
         Plots the average values of a feature over time.
 
         Parameters:
         -----------
         spot_feature : (str, default = 'Radius') - feature to plot over time
-        spot_feature_unit : (str, default = None) - unit of the feature to plot over time.
+        feature_unit : (str, default = None) - unit of the feature to plot over time.
         """
 
         fig, ax = plt.subplots()
@@ -851,13 +856,13 @@ class CellSegmentationTracker:
                     self.spots_df.groupby('T')[spot_feature].mean(), \
                     self.spots_df.groupby('T')[spot_feature].std(ddof=1), fmt = 'k.',\
                           capsize = 5, capthick = 2, elinewidth = 2, ms = 5)
-        ylabel = f'{spot_feature} ({spot_feature_unit})' if spot_feature_unit is not None else spot_feature
+        ylabel = f'{spot_feature} ({feature_unit})' if feature_unit is not None else spot_feature
         ax.set(xlabel = f"Time ({self.unit_conversion_dict['physical_time_unit_name']})", ylabel = ylabel, title = 'Average ' + spot_feature + ' over time')
         plt.show()
 
         return
 
-    def calculate_grid_statistics(self, Ngrid, include_features = [], return_absolute_cell_counts = False,\
+    def calculate_grid_statistics(self, Ngrid, include_features = [],\
                                save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results.
@@ -868,24 +873,29 @@ class CellSegmentationTracker:
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
                 with the restriction that the grid squares are square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
-                            in addition to the standard features number_density, mean_velocity_X and mean_velocity_Y.
+                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
+                            mean_velocity_X and mean_velocity_Y.
                             The possible feature keys are the columns of the spots dataframe generated 
                             by the function 'generate_csv_files'.
-        return_absolute_cell_counts : (bool, default = False) - if True, the number of cells in each grid square
-                                      is returned instead of the density.
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. 
-                                     It will be saved in the output_folder, if provided, 
-                                     otherwise in the image folder
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+               It will be saved in the output_folder, if provided, otherwise in the image folder.
+
 
         Returns:
         -------
         grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
         """
-        name = self.output_folder + '_grid_stats.csv' if name is None else name
 
-        # Store whether to return absolute cell counts or density
-        self.__return_absolute_cell_counts = return_absolute_cell_counts
+        if name is None:
+            try:
+                name = os.path.basename(self.__img_path).strip(".tif")
+            except:
+                name = 'CellSegmentationTracker'
+            name = name + '_grid_stats.csv'
+        else:
+            if not name.endswith('.csv'):
+                name = name + '.csv'
 
         cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
         add_to_grid = []
@@ -897,7 +907,7 @@ class CellSegmentationTracker:
         # Extract relevant data from dataframe as array
         data = self.spots_df.loc[:, cols].values.astype('float')
 
-        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
         # Initialize grid dictionary
@@ -918,9 +928,9 @@ class CellSegmentationTracker:
                     mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + self.__grid_dict['grid_len'])
             
                     if mask.sum() == 0:
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:6] = \
-                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0]
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 6:] = np.nan * np.zeros(len(grid_columns) - 6)
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:7] = \
+                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0, 0]
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -928,16 +938,14 @@ class CellSegmentationTracker:
                             vy = np.nanmean(arr_Y[mask, 5])
 
                         # If true, return the number of cells in each grid as opposed to the density
-                        if return_absolute_cell_counts:
-                            density = mask.sum() 
-                        else:
-                            density = mask.sum() / (self.__grid_dict['grid_len']**2)     
+                        cell_number = mask.sum() 
+                        density = cell_number / (self.__grid_dict['grid_len']**2)     
 
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:8] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
-                                                                y + self.__grid_dict['grid_len'] / 2, density, vx, vy]
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
+                                                                y + self.__grid_dict['grid_len'] / 2, cell_number, density, vx, vy]
                         # Add additional features to grid (if any)
                         for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 8 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                     Ngrid_count += 1
 
@@ -968,6 +976,7 @@ class CellSegmentationTracker:
         show : (bool, default=True) - if True, the heatmap is shown.
 
         """
+  
         if feature not in self.grid_df.columns and feature not in self.spots_df.columns:
             print("\n Feature not in grid dataframe! Please specify a feature that is in the grid dataframe generated by the method calculate_grid_statistics.\n \
             These features are: \n", self.grid_df.columns, "\n")
@@ -1179,5 +1188,4 @@ class CellSegmentationTracker:
     # std v variance
     # make opt to average or not?
     # include some kind of check eq. thingy
-
 

@@ -319,9 +319,9 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
             idx = df_spots.index[df_spots['TRACK_ID'] == track]
             df_spots_res = df_spots.loc[idx].copy()
 
-            frame_gap = np.hstack([df_spots_res['Frame'].diff().values[1:], df_spots_res['Frame'].diff().values[-1:]])
-            velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / frame_gap
-            velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / frame_gap
+            time_gap = np.hstack([df_spots_res['T'].diff().values[1:], df_spots_res['T'].diff().values[-1:]])
+            velocity_x = np.hstack([df_spots_res['X'].diff().values[1:], df_spots_res['X'].diff().values[-1:]]) / time_gap
+            velocity_y = np.hstack([df_spots_res['Y'].diff().values[1:], df_spots_res['Y'].diff().values[-1:]]) / time_gap
 
             df_spots['Velocity_X'].iloc[idx] = velocity_x
             df_spots['Velocity_Y'].iloc[idx] = velocity_y
@@ -329,8 +329,6 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
     if get_edge_features:
         edge_features.insert(0, 'TRACK_ID')
         df_edges = pd.DataFrame(edge_objects, columns=edge_features).astype(float)
-        print(df_edges.info())
-        print(edge_features)
     if get_track_features:
         df_tracks = pd.DataFrame(track_objects, columns=track_features).astype(float)
 

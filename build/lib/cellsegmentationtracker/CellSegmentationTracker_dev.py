@@ -1155,7 +1155,7 @@ class CellSegmentationTracker:
             plt.show()
         return
 
-    def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
+    def get_density_fluctuations(self, Nwindows = 10, frame_range = [0,0], return_absolute_cell_counts = False,):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 
         This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
@@ -1175,6 +1175,15 @@ class CellSegmentationTracker:
 
         """
 
+
+        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
+        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
+    
+        if self.grid_df is None:
+            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
+            
+        data = self.grid_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
+        data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
 
         # Extract relevant data from dataframe as array
         data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
@@ -1225,9 +1234,6 @@ class CellSegmentationTracker:
 
 
         # Calculate average of average defect densities
-        if self.grid_df is None:
-            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
-            
         av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
         av_av_defect_densities = self.grid_df['number_density'].mean()
         av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
@@ -1243,10 +1249,12 @@ class CellSegmentationTracker:
         else:
             return density_fluctuations, window_sizes, av_numbers
 
-    # include uncertainty in density
-    # std v variance
-    # make opt to average or not?
+
+
+    # include frame range
     # include some kind of check eq. thingy
+    # test
+    # make plotter, possibly log. with hyperuniform line
 
 
 
