@@ -72,7 +72,7 @@ This module is meant to ease, automate and improve the process of biological cel
 ## Getting Started
 
 ### Prerequisites
-* Python 3.9 
+* Python 3.8 or 3.9 
 * Java 8
 * Jython 2.7
 * Fiji 2.9, and the TrackMate-Cellpose extension
@@ -85,7 +85,7 @@ This module is meant to ease, automate and improve the process of biological cel
 2. Download and install Java 8 here: https://www.oracle.com/java/technologies/downloads/#java8-windows
 3. Download and install Jython. Follow the instructions on https://www.jython.org/installation.html
 4. Install Anaconda or Miniconda, if you haven't already. Follow the instructions on https://docs.conda.io/en/latest/miniconda.html
-5. Create an conda virtual environment using Python 3.9 (it might also work with python 3.8 and 3.10). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
+5. Create an conda virtual environment using Python 3.9 or 3.8 (it might also work with newer versions). Follow the instructions on https://pypi.org/project/cellpose/. If you have a GPU available, consider installing the gpu-version; it drastically increases the segmentation speed. 
 6. Install the TrackMate extension Trackmate-Cellpose. To see how, visit: https://imagej.net/plugins/trackmate/detectors/trackmate-cellpose. Make sure to update it after installation.
 7. From the cellpose virtual environment, install CellSegmentationTracker using the following command:
 
