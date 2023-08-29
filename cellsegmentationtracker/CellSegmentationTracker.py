@@ -865,7 +865,10 @@ class CellSegmentationTracker:
     def calculate_grid_statistics(self, Ngrid, include_features = [],\
                                save_csv = True, name = None):
         """
-        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results.
+        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
+        As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
+        as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
+        as well
 
         Parameters:
         ----------
