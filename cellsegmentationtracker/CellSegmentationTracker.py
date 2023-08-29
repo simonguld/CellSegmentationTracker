@@ -162,7 +162,7 @@ class CellSegmentationTracker:
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
-        self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if os.path.isfile(self.__imagej_filepath)  else None
+        self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if os.path.isfile(f'{self.__imagej_filepath}')  else None
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
@@ -265,7 +265,7 @@ class CellSegmentationTracker:
         if self.img_folder is None:
             raise OSError("No image folder nor xml file provided!")
         # If image folder is provided, check if it is a folder or a .tif file
-        elif self.img_folder.endswith(".tif") and not os.path.isdir(self.img_folder):
+        elif not self.img_folder.endswith(".tif") and not os.path.isdir(f'{self.img_folder}'):
             raise OSError("Image folder path must either be a folder or a .tif file!")
         # If .tif file is provided instead of folder, handle it
         elif self.img_folder.endswith(".tif"):
@@ -537,7 +537,7 @@ class CellSegmentationTracker:
         ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
         return
 
-    def __velocity_field_plotter(self,X, Y, VX, VY, i = 0, title = None):
+    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, title = None):
         """
         Plot the velocity field for a given frame.
         """
@@ -633,16 +633,16 @@ class CellSegmentationTracker:
         Run cellpose segmentation and trackmate tracking.
         """
         # Ensure that cellpose folder path is valid
-        if not os.path.isdir(self.__cellpose_folder_path):
+        if not os.path.isdir(f'{self.__cellpose_folder_path}'):
             raise OSError("Invalid cellpose folder path!")
         # Ensure that imageJ filepath is valid
-        if not os.path.isfile(self.__imagej_filepath):
+        if not os.path.isfile(f'{self.__imagej_filepath}'):
             raise OSError("Invalid imageJ filepath!")
         # Ensure that cellpose python filepath is valid
-        if not os.path.isfile(self.__cellpose_python_filepath):
+        if not os.path.isfile(f'{self.__cellpose_python_filepath}'):
             raise OSError("Invalid cellpose python filepath!")
         # Ensure that image folder/file path is valid
-        if not os.path.isdir(self.img_folder) and not os.path.isfile(self.img_folder):
+        if not os.path.isdir(f'{self.img_folder}') and not os.path.isfile(f'{self.img_folder}'):
             raise OSError("Invalid image folder path!")
         
         ## Set relevant attribute values
@@ -669,7 +669,7 @@ class CellSegmentationTracker:
                 self.__cellprob_threshold = 0.0
 
         # Set model path
-        if os.path.isfile(self.__custom_model_path):
+        if os.path.isfile(f'{self.__custom_model_path}'):
             self.__use_model = 'CUSTOM'
         else:
             if self.__use_model in self.pretrained_models:
@@ -734,13 +734,13 @@ class CellSegmentationTracker:
         edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
         """
 
-        if not os.path.isfile(self.xml_path) or not self.xml_path.endswith(".xml"):
+        if not os.path.isfile(f'{self.xml_path}') or not self.xml_path.endswith(".xml"):
             raise OSError("No or invalid xml file path provided!")
         else:
             print("\nStarting to generate csv files from xml file now. This may take a while... \
                   \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
             t1 = time.time()
-            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
+            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
                                                             get_track_features = get_tracks, get_edge_features = get_edges)
             t2 = time.time()
             print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
@@ -892,7 +892,6 @@ class CellSegmentationTracker:
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                It will be saved in the output_folder, if provided, otherwise in the image folder.
-
 
         Returns:
         -------
@@ -1107,4 +1106,3 @@ class CellSegmentationTracker:
         if show:
             plt.show()
         return
-

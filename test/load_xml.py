@@ -39,7 +39,6 @@ path_cells = '20.09.xml'
 ### FUNCTIONS -----------------------------------------------------------------
 
 
-
 def trackmate_peak_import(trackmate_xml_path, include_features_list = None, get_tracks=True):
     """Import detected peaks with TrackMate Fiji plugin.
 

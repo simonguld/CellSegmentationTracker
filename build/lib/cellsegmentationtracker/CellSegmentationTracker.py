@@ -43,7 +43,7 @@ class CellSegmentationTracker:
 
     Parameters:
     ------------  
-    cellpose_folder_path: (str) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
+    cellpose_folder_path: (str, default=None) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
                                 On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
                                 On MAC, it is typically found in 
                                 ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
@@ -151,25 +151,23 @@ class CellSegmentationTracker:
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
     """
 
-    def __init__(self, cellpose_folder_path, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
+    def __init__(self, cellpose_folder_path = None, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
                   use_model = 'CYTO', custom_model_path = None, show_segmentation = True, cellpose_dict = dict(), trackmate_dict = dict(), unit_conversion_dict = dict()):
 
 
+        self.__cellpose_folder_path = cellpose_folder_path
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
         self.__img_path = None    
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
-        self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if self.__imagej_filepath is not None else None
+        self.__fiji_folder_path = os.path.dirname(self.__imagej_filepath) if os.path.isfile(f'{self.__imagej_filepath}')  else None
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
 
-        self.__cellpose_folder_path = cellpose_folder_path
-
         if self.__cellpose_python_filepath is not None:
-            self.__cellpose_folder_path = cellpose_folder_path
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
                                         os.path.join(self.__cellpose_folder_path, 'models', 'cyto2'),\
                                         os.path.join(self.__cellpose_folder_path, 'models', 'nuclei'), \
@@ -267,15 +265,14 @@ class CellSegmentationTracker:
         if self.img_folder is None:
             raise OSError("No image folder nor xml file provided!")
         # If image folder is provided, check if it is a folder or a .tif file
-        elif self.img_folder[-4:] != ".tif" and not os.path.isdir(self.img_folder):
+        elif not self.img_folder.endswith(".tif") and not os.path.isdir(f'{self.img_folder}'):
             raise OSError("Image folder path must either be a folder or a .tif file!")
         # If .tif file is provided instead of folder, handle it
-        elif self.img_folder[-4:] == ".tif":
+        elif self.img_folder.endswith(".tif"):
             self.__img_path = self.img_folder
             self.img_folder = os.path.dirname(self.img_folder)
             return
         else:
-            print("\nUsing image folder: ", self.img_folder)
             im_list = get_imlist(self.img_folder, '.tif')
             # If more than one .tif file is provided, merge them into one
             if len(im_list) > 1:
@@ -283,11 +280,13 @@ class CellSegmentationTracker:
                 self.__img_path = os.path.join(self.img_folder, "merged.tif")
                 if os.path.isfile(self.__img_path):
                     os.remove(self.__img_path)
-                merge_tiff(self.img_folder, img_out_path = os.path.join(self.img_folder, "merged.tif"))
+                merge_tiff(self.img_folder, img_out_path = self.__img_path)
                 print("\nMerged tif files into one file: ", self.__img_path)
             else:
                 self.__img_path = im_list[0]
-                print("\nUsing tif file: ", self.__img_path)
+                
+        print("\nUsing image folder: ", self.img_folder)
+        print("\nUsing tif file: ", self.__img_path)
         return
 
     def __modify_cellpose(self):
@@ -300,7 +299,7 @@ class CellSegmentationTracker:
             if os.path.isfile(os.path.join(self.__cellpose_folder_path, name)):
                 paths_to_modify.append(os.path.join(self.__cellpose_folder_path, name))
             else:
-                continue
+                pass
   
         # Define search and replace strings
         search_strings = ["'--flow_threshold', default=0.4", "'--cellprob_threshold', default=0", \
@@ -356,7 +355,6 @@ class CellSegmentationTracker:
         if self.trackmate_dict['ALLOW_TRACK_MERGING'] or self.trackmate_dict['ALLOW_TRACK_SPLITTING']:
             print("\nWARNING: Track merging and/or splitting has been allowed. This may result in inconsistent velocities, \
                   as more spots belonging to the same track can be present at the same time\n")
-
         return
 
     def __run_jython_script(self):
@@ -365,11 +363,14 @@ class CellSegmentationTracker:
         """
         # Change directory to fiji folder
         os.chdir(self.__fiji_folder_path)
+
         # Get name of executable
         executable = list(os.path.split(self.__imagej_filepath))[-1]
+
         # add ./ for linux and mac
         if platform.system() != 'Windows':
             executable = './' + executable
+
         # Set path to jython script
         jython_path = os.path.join(self.__class_path, "jython_cellpose.py")
 
@@ -385,6 +386,7 @@ class CellSegmentationTracker:
         
             # To run headlessly, call jython script as a subprocess
             pipe = Popen([executable,'--ij2','--headless', '--run', f"{jython_path}"], stdout=PIPE)
+
             # wait for xml file to be created
             try:
                 while not os.path.isfile(self.xml_path):
@@ -393,8 +395,10 @@ class CellSegmentationTracker:
             except: 
                 KeyboardInterrupt
                 sys.exit(0)
+
             # kill subprocess
             pipe.kill()
+
             # print output
             print(pipe.communicate()[0].decode('ascii'))
             
@@ -422,6 +426,11 @@ class CellSegmentationTracker:
         for  i, s in enumerate(im_settings_list):
             im_conversion_list.append(float(im_settings.get(s)))
             print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
+
+        for key in dict_key_names:
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+                print(f'{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
 
         for key in dict_keys:
             if key not in self.unit_conversion_dict.keys():
@@ -452,7 +461,7 @@ class CellSegmentationTracker:
                 name = os.path.basename(self.__img_path).strip(".tif")
             except:
                 name = 'CellSegmentationTracker'
-
+        print("\n")
         if self.spots_df is not None:
             path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
             self.spots_df.to_csv(path_out_spots, index = False) 
@@ -528,7 +537,7 @@ class CellSegmentationTracker:
         ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
         return
 
-    def __velocity_field_plotter(self,X, Y, VX, VY, i = 0, title = None):
+    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, title = None):
         """
         Plot the velocity field for a given frame.
         """
@@ -623,14 +632,17 @@ class CellSegmentationTracker:
         """
         Run cellpose segmentation and trackmate tracking.
         """
+        # Ensure that cellpose folder path is valid
+        if not os.path.isdir(f'{self.__cellpose_folder_path}'):
+            raise OSError("Invalid cellpose folder path!")
         # Ensure that imageJ filepath is valid
-        if not os.path.isfile(self.__imagej_filepath):
+        if not os.path.isfile(f'{self.__imagej_filepath}'):
             raise OSError("Invalid imageJ filepath!")
         # Ensure that cellpose python filepath is valid
-        if not os.path.isfile(self.__cellpose_python_filepath):
+        if not os.path.isfile(f'{self.__cellpose_python_filepath}'):
             raise OSError("Invalid cellpose python filepath!")
         # Ensure that image folder/file path is valid
-        if not os.path.isdir(self.img_folder) and not os.path.isfile(self.img_folder):
+        if not os.path.isdir(f'{self.img_folder}') and not os.path.isfile(f'{self.img_folder}'):
             raise OSError("Invalid image folder path!")
         
         ## Set relevant attribute values
@@ -657,16 +669,14 @@ class CellSegmentationTracker:
                 self.__cellprob_threshold = 0.0
 
         # Set model path
-        if self.__custom_model_path is not None:
+        if os.path.isfile(f'{self.__custom_model_path}'):
             self.__use_model = 'CUSTOM'
-
-        # If custom model is not provided, find the path of the pretrained model
-        if self.__custom_model_path is None and self.__use_model not in self.pretrained_models:
-            raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)
-        elif self.__custom_model_path is None and self.__use_model in self.pretrained_models:
-            idx = self.pretrained_models.index(self.__use_model)
-            self.__custom_model_path = self.__pretrained_models_paths[idx]
-        
+        else:
+            if self.__use_model in self.pretrained_models:
+                idx = self.pretrained_models.index(self.__use_model)
+                self.__custom_model_path = self.__pretrained_models_paths[idx]
+            else:
+                raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)
 
         # Prepare images
         self.__prepare_images()
@@ -722,17 +732,18 @@ class CellSegmentationTracker:
         spots_df : (pandas dataframe) - dataframe with spot features
         tracks_df : (pandas dataframe) - dataframe with track features if get_tracks = True, else None
         edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
-
         """
 
-
-        if self.xml_path is not None:
+        if not os.path.isfile(f'{self.xml_path}') or not self.xml_path.endswith(".xml"):
+            raise OSError("No or invalid xml file path provided!")
+        else:
             print("\nStarting to generate csv files from xml file now. This may take a while... \
                   \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
-                  
-            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=True,
+            t1 = time.time()
+            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
                                                             get_track_features = get_tracks, get_edge_features = get_edges)
-            print("Finished generating csv files from xml file.\n")
+            t2 = time.time()
+            print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
 
             # Convert length and time to physical units, if necessary
             self.__unit_conversion()
@@ -751,8 +762,6 @@ class CellSegmentationTracker:
                         if key in df.columns:
                             df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
                 print("Time unit conversion done.\n")
-        else:
-            raise OSError("No xml file provided!")
         
         self.__Nspots = len(self.spots_df)
         self.__Ntracks = len(self.tracks_df)
@@ -760,6 +769,7 @@ class CellSegmentationTracker:
 
         if save_csv_files:
             self.__save_csv(name)
+
         return self.spots_df, self.tracks_df, self.edges_df
 
     def get_feature_keys(self):
@@ -767,11 +777,11 @@ class CellSegmentationTracker:
         Get the keys of the features in the csv files.
         """
         if self.spots_df is not None:
-            print("Spot features: ", self.spots_df.columns)
+            print("\nSpot features: ", self.spots_df.columns)
         if self.tracks_df is not None:
             print("Track features: ", self.tracks_df.columns)
         if self.edges_df is not None:
-            print("Edge features: ", self.edges_df.columns)
+            print("Edge features: ", self.edges_df.columns, "\n")
         return
 
     def print_settings(self):
@@ -795,8 +805,8 @@ class CellSegmentationTracker:
             for  s in settings_list:
                 print_list.append(s + f': {obj.get(s)}') 
         print("\nImage information: ", print_list)
-        print("Cellpose settings: ", self.cellpose_dict)
-        print("Trackmate settings: ", self.trackmate_dict, "\n")
+        print("\nCellpose settings: ", self.cellpose_dict)
+        print("\nTrackmate settings: ", self.trackmate_dict, "\n")
         return
 
     def get_summary_statistics(self):
@@ -820,14 +830,13 @@ class CellSegmentationTracker:
         # Calculate average values of spot observables
         for i, col in enumerate(self.spots_df.columns.drop(spots_exclude_list)):
                 avg, std = np.mean(self.spots_df[col]), np.std(self.spots_df[col], ddof = 1)
-                print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Nspots:.3f}")
+                print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / np.sqrt(self.__Nspots):.3f}")
 
         # Calculate average values of track observables
         if self.tracks_df is not None and self.__Ntracks > 0:
             tracks_exclude_list = ['TRACK_INDEX', 'TRACK_ID','TRACK_START', 'TRACK_STOP', 'TRACK_MAX_SPEED',\
                                     'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', 'MAX_DISTANCE_TRAVELED',\
-                                    'CONFINEMENT_RATIO', 'MEAN_STRAIGHT_LINE_SPEED', 'LINEARITY_OF_FORWARD_PROGRESSION',\
-                                        'MEAN_DIRECTIONAL_CHANGE_RATE', 'TRACK_X_LOCATION', 'TRACK_Y_LOCATION',\
+                                    'CONFINEMENT_RATIO', 'TRACK_X_LOCATION', 'TRACK_Y_LOCATION',\
                                               'TRACK_Z_LOCATION']
 
             print("\nSUMMARY STATISTICS FOR TRACKS: ")
@@ -838,7 +847,7 @@ class CellSegmentationTracker:
             # Calculate average values of track observables
             for i, col in enumerate(self.tracks_df.columns.drop(tracks_exclude_list)):
                 avg, std = np.mean(self.tracks_df[col]), np.std(self.tracks_df[col], ddof = 1)
-                print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / self.__Ntracks:.3f}")
+                print(f"Average value of {col}: {avg:.3f}", " \u00B1", f"{std / np.sqrt(self.__Ntracks):.3f}")
         return
 
     def plot_feature_over_time(self, spot_feature = 'Area', feature_unit = None,):
@@ -865,7 +874,10 @@ class CellSegmentationTracker:
     def calculate_grid_statistics(self, Ngrid, include_features = [],\
                                save_csv = True, name = None):
         """
-        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results.
+        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
+        As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
+        as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
+        as well
 
         Parameters:
         ----------
@@ -880,7 +892,6 @@ class CellSegmentationTracker:
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                It will be saved in the output_folder, if provided, otherwise in the image folder.
-
 
         Returns:
         -------
@@ -1095,97 +1106,3 @@ class CellSegmentationTracker:
         if show:
             plt.show()
         return
-
-    def get_density_fluctuations(self, Nwindows = 10, return_absolute_cell_counts = False,):
-        """
-        Calculate defect density fluctuations for different (circular) window sizes (radii). 
-        This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
-        counting the number of particles within each window, and finally calculating the variance of the 
-        number of particles for each window size. The largest window size is determined by the size of the image,
-        and the smallest window size is determined by the number of windows.
-
-        Parameters:
-        -----------
-        Nwindows: (int, default = 10) - number of windows to calculate defect density for.
-        Ndof: (int, default = 1) - number of degrees of freedom used to calculate variance
-
-        Returns --> (defect_densities, window_sizes): 
-        -------- 
-        defect_densities: array of defect densities for different window sizes
-        window_sizes: array of window sizes
-
-        """
-
-
-        # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
-
-
-        # Initialize grid dictionary
-        self.__initialize_grid(Ngrid = 8)
-
-        # Intialize array of defect densities
-        defect_densities = np.zeros([self.__Nframes, Nwindows])
-
-        # Initalize array of average defect densities
-        av_defect_densities = np.zeros(self.__Nframes)
-
-        # Define center point
-        LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
-        LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
-        center = np.array([LX/2, LY/2])
-
-        # Calculate the average radius of a spot
-        avg_radius = self.spots_df['Radius'].mean()
-        
-        # Define max. and min. window size
-        if self.__grid_dict['Ny'] <= self.__grid_dict['Nx']:
-            max_window_size = LY / 2 - 2 * avg_radius
-        elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
-            max_window_size = LX / 2 - 2 * avg_radius
-
-        max_window_size = LX / 2 - 1
-        min_window_size = (LX / 2 ) / Nwindows
-
-        # Define window sizes
-        window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
-
-        for frame in np.arange(self.__Nframes):
-            # Step 1: Convert list of dictionaries to array of defect positions
-            defect_positions = data[data[:, 0] == frame, 1:]
-
-            # Step 2: Calculate distance of each defect to center
-            distances = np.linalg.norm(defect_positions - center, axis=1)
-
-            # Step 3: Calculate density for each window size
-            for i, window_size in enumerate(window_sizes):
-                # Get defects within window
-                defects_in_window = len(distances[distances < window_size])
-                # Calculate  and store density
-                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
-
-
-        # Calculate average of average defect densities
-        if self.grid_df is None:
-            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
-            
-        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-        av_av_defect_densities = self.grid_df['number_density'].mean()
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-
-        print(av_defect_densities)
-
-        # Calculate fluctuations of defect density
-        density_fluctuations = np.sqrt(np.mean((defect_densities - \
-                                        av_av_defect_densities)**2, axis = 0))
-
-        if return_absolute_cell_counts:
-            return density_fluctuations * (np.pi * window_sizes**2), window_sizes, av_numbers
-        else:
-            return density_fluctuations, window_sizes, av_numbers
-
-    # include uncertainty in density
-    # std v variance
-    # make opt to average or not?
-    # include some kind of check eq. thingy
-
