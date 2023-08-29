@@ -229,8 +229,8 @@ can be used for postprocess analysis
     - CELL_DIAMETER (positive float, default = 0.0): Estimate of the cell diameter in the image, in pixel units. When set to 0.0, Cellpose automatically estimates the cell diameter. This is recommended, as Cellpose performs poorly when given an inacurrate cell diameter estimate.
     - USE_GPU (boolean, default = False)
     - SIMPLIFY_CONTOURS (boolean, default = True): If True the 2D contours detected will be simplified. If False, they will follow exactly the pixel borders.
-    - FLOW_THRESHOLD (positive float): The maximum allowed error of the flows for each mask. Increase this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, decrease this threshold if cellpose is returning too many ill-shaped ROIs. The default value is 0.4 for the Cellpose models and 'EPI500'. For 'EPI2500', the default is 0.5.
-    - CELLPROB_THRESHOLD (float in [-6, 6]): The pixels greater than the cellprob_threshold are used to run dynamics and determine ROIs. Decrease this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, increase this threshold if cellpose is returning too ROIs particularly from dim areas. The default is 0.0 for the cellpose models. For 'EPI500', the default is 0.5, and for 'EPI2500', the default is -1.0.
+    - FLOW_THRESHOLD (positive float): The maximum allowed error of the flows for each mask. Increase this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, decrease this threshold if cellpose is returning too many ill-shaped ROIs. The default value is 0.4 for the Cellpose models and 'EPI500'. For 'EPI2500' and 'EPI6000', the default is 0.5.
+    - CELLPROB_THRESHOLD (float in [-6, 6]): The pixels greater than the cellprob_threshold are used to run dynamics and determine ROIs. Decrease this threshold if cellpose is not returning as many ROIs as you’d expect. Similarly, increase this threshold if cellpose is returning too many ROIs particularly from dim areas. The default is 0.0 for 'EPI6000' and the cellpose models. For 'EPI500', the default is 0.5, and for 'EPI2500', the default is -1.0.
 - **trackmate_dict: (dict, default=dict())**
   - A dictionary containing parameters for configuring the TrackMate LAPTracker. It has the following keys:
       - LINKING_MAX_DISTANCE (float, default = 15.0): The max distance between two consecutive spots, in physical units (if provided in .tif file, otherwise in pixel units), allowed for creating links.
@@ -240,7 +240,7 @@ can be used for postprocess analysis
 ```NB```: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, which can lead to inaccurate velocity estimations.
       - ALLOW_TRACK_SPLITTING (bool, default = False): If True then the tracker will perform tracklets or segments splitting, that is: have one tracklet ending linking to two or more tracklet beginnings . This leads to tracks possibly separating into several sub-tracks across time, like in cell division.      
 ```NB```: Setting this to true makes it possible for several cells belonging to the same track to be present at the same time, which can lead to inaccurate velocity estimations.
-- **unit_conversion_dict: (dict, default=dict()**
+- **unit_conversion_dict: (dict, default=dict())**
   - A dictionary containing parameters with physical unit names as well as 
                           the time_interval in physical units. Note that length and time scales are automatically converted to
                           physical units by TrackMate if they are correctly provided in the .tif file. 
@@ -248,9 +248,8 @@ can be used for postprocess analysis
                           perimeter and circularity can, given an unequal rescaling of the x and y scales, only
                           be calculated if the actual spot contours are provided, which they are not in TrackMate. 
                           Parameters are:
-      - frame_interval_in_physical_units (float, default = 1.0): The time interval between frames in physical units.
-      - physical_length_unit_name (str, default = 'pixels'): The time interval between frames in physical units.
-                                                                   If the .tif file does not contain this information, this parameter can be used to provide it.
+      - frame_interval_in_physical_units (float, default = 1.0): The time interval between frames in physical units.  If the .tif file does not contain this information, this parameter can be used to provide it.
+      - physical_length_unit_name (str, default = 'pixels'): The name of the physical length unit.
       - physical_time_unit_name (str, default = 'frame'): The name of the physical time unit. If provided, plots etc. will be given in units of time as opposed to frames.
 
 
@@ -278,7 +277,7 @@ List of methods:
 run_segmentation_tracking
 generate_csv_files
 get_summary_statistics
-lot_feature_over_time
+plot_feature_over_time
 calculate_grid_statistics
 visualize_grid_statistics
 plot_velocity_field
@@ -336,10 +335,11 @@ Parameters:
 
 
 ```python
-calculate_grid_statistics(Ngrid, include_features = [], return_absolute_cell_counts = False,
-                               save_csv = True, name = None)
+calculate_grid_statistics(Ngrid, include_features = [], save_csv = True, name = None)
 ```
-Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
+Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
+as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
+as well
 
 Parameters:
 - **Ngrid: (int > 0)**
@@ -347,13 +347,10 @@ Parameters:
                 with the restriction that the grid squares are square.
 - **include_features : (list of strings, default = [])**
     - list of features to include in the grid dataframe, 
-                            in addition to the standard features number_density, mean_velocity_X and mean_velocity_Y.
+                            in addition to the standard features no. of cells, number_density, mean_velocity_X and mean_velocity_Y.
                             The possible feature keys are the columns of the spots dataframe generated 
                             by the function 'generate_csv_files'.
-- **return_absolute_cell_counts : (bool, default = False)**
-    - if True, the number of cells in each grid square
-                                      is returned instead of the density.
-- ** save_csv : (bool, default=True)**
+- **save_csv : (bool, default=True)**
     - if True, the grid dataframe is saved as a csv file.
 - **name : (string, default = None)**
     - name of the csv file. If None, the name of the image file is used. It will be saved in the output_folder, if provided, 
@@ -365,8 +362,8 @@ Returns --> grid_df:
 
 
 ```python
-visualize_grid_statistics(feature = 'number_density', feature_unit = None frame_range = [0,0], calculate_average = False, \
-                             animate = True, frame_interval = 1200, show = True)
+visualize_grid_statistics(feature = 'number_density', feature_unit = None frame_range = [0,0],
+calculate_average = False, animate = True, frame_interval = 1200, show = True)
 ```
 Visualize the grid statistics (generated by the method calculate_grid_statistics) for a given feature 
         in the form of a heatmap.
@@ -380,10 +377,10 @@ Parameters:
 - **frame_range : (list of ints, default=[0,0])**
     - range of frames to visualize. Left endpoint is included, right endpoint is not.
                       If [0,0], all frames are visualized.
-- ** calculate_average : (bool, default=False)**
+- **calculate_average : (bool, default=False)**
     - if True, the average heatmap over the given frame range 
                             is calculated and visualized.
-- ** animate : (bool, default=True))**
+- **animate : (bool, default=True))**
     - if True, the heatmap is animated over the given frame range.
 - **frame_interval : (int, default=1200)**
     - time between frames in ms (for the animation).
@@ -395,7 +392,7 @@ Parameters:
 plot_velocity_field(mode = 'field', frame_range = [0,0], calculate_average = False, \
                                 animate = True, frame_interval = 1200, show = True)
 ```
-Plot or animate the velocity field for a given frame range.
+Plot or animate the velocity field or velocity streamlines for a given frame range.
 
 Parameters:
 - **mode : (string, default = 'field_lines')**
@@ -403,10 +400,10 @@ Parameters:
 - **frame_range : (list of ints, default=[0,0])**
     - range of frames to visualize. Left endpoint is included, right endpoint is not.
                       If [0,0], all frames are visualized.
-- ** calculate_average : (bool, default=False)**
+- **calculate_average : (bool, default=False)**
     - if True, the average heatmap over the given frame range 
                             is calculated and visualized.
-- ** animate : (bool, default=True))**
+- **animate : (bool, default=True))**
     - if True, the heatmap is animated over the given frame range.
 - **frame_interval : (int, default=1200)**
     - time between frames in ms (for the animation).
