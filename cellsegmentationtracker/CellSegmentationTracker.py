@@ -956,6 +956,8 @@ class CellSegmentationTracker:
 
         return self.grid_df
 
+
+
     def visualize_grid_statistics(self, feature = 'number_density', feature_unit = None, frame_range = [0,0], calculate_average = False, \
                              animate = True, frame_interval = 1200, show = True,):
         """

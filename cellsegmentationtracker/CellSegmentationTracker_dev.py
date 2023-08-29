@@ -924,7 +924,7 @@ class CellSegmentationTracker:
 
         return
 
-    def calculate_grid_statistics(self, Ngrid, include_features = [], return_absolute_cell_counts = False,\
+    def calculate_grid_statistics(self, Ngrid, include_features = [],\
                                save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results.
@@ -935,24 +935,29 @@ class CellSegmentationTracker:
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
                 with the restriction that the grid squares are square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
-                            in addition to the standard features number_density, mean_velocity_X and mean_velocity_Y.
+                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
+                            mean_velocity_X and mean_velocity_Y.
                             The possible feature keys are the columns of the spots dataframe generated 
                             by the function 'generate_csv_files'.
-        return_absolute_cell_counts : (bool, default = False) - if True, the number of cells in each grid square
-                                      is returned instead of the density.
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. 
-                                     It will be saved in the output_folder, if provided, 
-                                     otherwise in the image folder
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+               It will be saved in the output_folder, if provided, otherwise in the image folder.
+
 
         Returns:
         -------
         grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
         """
-        name = self.output_folder + '_grid_stats.csv' if name is None else name
 
-        # Store whether to return absolute cell counts or density
-        self.__return_absolute_cell_counts = return_absolute_cell_counts
+        if name is None:
+            try:
+                name = os.path.basename(self.__img_path).strip(".tif")
+            except:
+                name = 'CellSegmentationTracker'
+            name = name + '_grid_stats.csv'
+        else:
+            if not name.endswith('.csv'):
+                name = name + '.csv'
 
         cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
         add_to_grid = []
@@ -964,7 +969,7 @@ class CellSegmentationTracker:
         # Extract relevant data from dataframe as array
         data = self.spots_df.loc[:, cols].values.astype('float')
 
-        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
         # Initialize grid dictionary
@@ -985,9 +990,9 @@ class CellSegmentationTracker:
                     mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + self.__grid_dict['grid_len'])
             
                     if mask.sum() == 0:
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:6] = \
-                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0]
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 6:] = np.nan * np.zeros(len(grid_columns) - 6)
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:7] = \
+                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0, 0]
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -995,16 +1000,14 @@ class CellSegmentationTracker:
                             vy = np.nanmean(arr_Y[mask, 5])
 
                         # If true, return the number of cells in each grid as opposed to the density
-                        if return_absolute_cell_counts:
-                            density = mask.sum() 
-                        else:
-                            density = mask.sum() / (self.__grid_dict['grid_len']**2)     
+                        cell_number = mask.sum() 
+                        density = cell_number / (self.__grid_dict['grid_len']**2)     
 
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:8] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
-                                                                y + self.__grid_dict['grid_len'] / 2, density, vx, vy]
+                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
+                                                                y + self.__grid_dict['grid_len'] / 2, cell_number, density, vx, vy]
                         # Add additional features to grid (if any)
                         for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 8 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                     Ngrid_count += 1
 
@@ -1014,6 +1017,7 @@ class CellSegmentationTracker:
             self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
 
         return self.grid_df
+
 
     def visualize_grid_statistics(self, feature = 'number_density', feature_unit = None, frame_range = [0,0], calculate_average = False, \
                              animate = True, frame_interval = 1200, show = True,):
@@ -1173,29 +1177,23 @@ class CellSegmentationTracker:
         window_sizes: array of window sizes
 
         """
-
-
-        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
-        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
     
         if self.grid_df is None:
-            self.calculate_grid_statistics(Ngrid = 12, return_absolute_cell_counts = False)
+            self.calculate_grid_statistics(Ngrid = 12, save_csv=False)
             
-        data = self.grid_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
-        data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
+        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
+        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
         # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, ['Frame', 'X','Y']].values.astype('float')
-
-
-        # Initialize grid dictionary
-        self.__initialize_grid(Ngrid = 8)
-
+        data = self.spots_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
+        mask = (data[:, 0] >= frame_range[0]) & (data[:, 0] < frame_range[1])
+        data = data[mask]
+   
         # Intialize array of defect densities
-        defect_densities = np.zeros([self.__Nframes, Nwindows])
+        defect_densities = np.zeros([Nframes, Nwindows])
 
         # Initalize array of average defect densities
-        av_defect_densities = np.zeros(self.__Nframes)
+        av_defect_densities = np.zeros(Nframes)
 
         # Define center point
         LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
@@ -1211,15 +1209,23 @@ class CellSegmentationTracker:
         elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
             max_window_size = LX / 2 - 2 * avg_radius
 
-        max_window_size = LX / 2 - 1
         min_window_size = (LX / 2 ) / Nwindows
 
         # Define window sizes
         window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
 
-        for frame in np.arange(self.__Nframes):
-            # Step 1: Convert list of dictionaries to array of defect positions
-            defect_positions = data[data[:, 0] == frame, 1:]
+        # Calculate average of average defect densities
+        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+        av_av_defect_densities = self.grid_df['number_density'].mean()
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+
+        idx = self.grid_df['number_density'].index[self.grid_df['number_density'] == 0]
+
+        av_defect_densities = np.zeros(Nframes)
+
+        for frame in np.arange(Nframes):
+            # Step 1: Get defect positions for the given frame
+            defect_positions = data[data[:, 0] == frame, -2:]
 
             # Step 2: Calculate distance of each defect to center
             distances = np.linalg.norm(defect_positions - center, axis=1)
@@ -1228,31 +1234,39 @@ class CellSegmentationTracker:
             for i, window_size in enumerate(window_sizes):
                 # Get defects within window
                 defects_in_window = len(distances[distances < window_size])
-                # Calculate  and store density
+
+                # Calculate and store density
                 defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
 
+            wind = max_window_size + avg_radius
+            defects_in_window = len(distances[distances < wind])
+            av_defect_densities[frame] = defects_in_window / (np.pi * wind**2)
+            av_av_defect_densities = np.mean(av_defect_densities)
 
-        # Calculate average of average defect densities
-        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-        av_av_defect_densities = self.grid_df['number_density'].mean()
         av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+        for frame in np.arange(Nframes):
+            for i, w in enumerate(window_sizes):
+                print(av_defect_densities[frame] * (np.pi * w**2), defect_densities[frame,i] * (np.pi * w**2))
 
-        print(av_defect_densities)
-
-        # Calculate fluctuations of defect density
+        # Calculate fluctuations of defect density (Ndof = 0)
         density_fluctuations = np.sqrt(np.mean((defect_densities - \
                                         av_av_defect_densities)**2, axis = 0))
+        density_fluctuations_std = np.sqrt(np.std((defect_densities - \
+                                        av_av_defect_densities), axis = 0,))
 
         if return_absolute_cell_counts:
-            return density_fluctuations * (np.pi * window_sizes**2), window_sizes, av_numbers
+            return density_fluctuations * (np.pi * window_sizes**2), \
+                density_fluctuations_std * (np.pi * window_sizes**2), window_sizes, av_defect_densities, av_numbers
         else:
-            return density_fluctuations, window_sizes, av_numbers
+            return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
 
 
 
-    # include frame range
+  
+    # test
     # include some kind of check eq. thingy
     # test
+    # include error estimates
     # make plotter, possibly log. with hyperuniform line
 
 
@@ -1301,12 +1315,30 @@ def main():
     cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, image_path, output_folder_path=output_directory, \
                                 show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
     t1= time.time()
-    cst.run_segmentation_tracking()
+    #cst.run_segmentation_tracking()
     t2= time.time()
     print("RUNTIME: ", np.round(t2-t1))
-    cst.generate_csv_files()
+  #  cst.generate_csv_files()
 
     
+    cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+
+    dens_fluc, dens_fluc_std, windows, av_densities, av_numbers = cst.get_density_fluctuations(Nwindows = 25,\
+                                                                    return_absolute_cell_counts = False,)
+
+
+    av, std = av_densities.mean(), av_densities.std(ddof = 1)
+    for point in av_densities:
+        print(std)
+        print((av - point) / std)
+
+    fig, ax = plt.subplots()
+    ax.plot(windows, dens_fluc, 'r.', label = 'Density fluctuations')
+   # ax.errorbar(windows, dens_fluc, dens_fluc_std, fmt = 'k.',\
+    #                        capsize = 5, capthick = 2, elinewidth = 2, ms = 5)  
+    
+
+    plt.show()
 
     if 0:
 
@@ -1319,7 +1351,7 @@ def main():
                                 animate = False, frame_interval = 1200, show = True)
 
         dens_fluc, windows, av_numbers = cst.get_density_fluctuations(Nwindows = 10,\
-                                                                    return_absolute_cell_counts = True,)
+                                                                    return_absolute_cell_counts = False,)
         print(windows)
         print(".....")
         fig, ax = plt.subplots()
