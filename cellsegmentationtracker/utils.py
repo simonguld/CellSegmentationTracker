@@ -223,8 +223,6 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
                 del_list.append(el)
         except:
             pass
-      #  if object_labels[el] not in spot_features:
-       #     del_list.append(el)
     for el in del_list:
         del object_labels[el]
     object_labels.update(minimal_labels)
