@@ -162,7 +162,6 @@ def trackmate_peak_import(trackmate_xml_path, include_features_list = None, get_
 
     return trajs
 
-
 def filter_spots(spots, name, value, isabove):
     if isabove:
         spots = spots[spots[name] > value]
@@ -266,14 +265,9 @@ def plot_spots(ax, spots, t, xlim = None, ylim = None, label=None, plot_masks = 
 def main():
     include_features = ['Frame', 'T', 'X', 'Y', 'Ellipse long axis', 'Ellipse short axis', 'Ellipse angle', 'Ellipse center x0', 'Ellipse center y0', 'Spot ID']
 
-    #tree = ET.parse('FakeTracks1.xml')
-    #spots = tree.getroot()
-
     spots = trackmate_peak_import(path_mock, include_features_list=include_features, get_tracks=True)
     
 
-    # spots = trackmate_p
-    # eak_import(path_mock)
     print(spots.head(20))
     print(spots.info())
     print(spots.describe())
@@ -288,19 +282,6 @@ def main():
     plotter = lambda ax, spots, t, plot_masks: plot_spots(ax, spots, t, xlim, ylim, plot_masks=plot_masks)
 
     anim = animate(plotter, spots, t_range=time_range[:25], inter=300, plot_masks=True,)
-    # fig, ax = plt.subplots()
-    # for t in time_range:
-    #     fig, ax = plt.subplots()
-    #     plot_spots(ax, spots, t, xlim, ylim, label='t = {}'.format(time_range[0]), plot_masks=True)
-    #     plt.show()
-    # for t in [0,]:
-    #     spots_t = spots[spots['T'] == t]
-    #     ax.plot(spots_t['X'], spots_t['Y'], 'o', label='t = {}'.format(t),)
-    #     draw_ellipses(ax, spots_t)
-    #     ax.legend()
-    #     ax.set(xlabel='X', ylabel='Y')
-    #     plt.gca().invert_yaxis()
-    
 
 if __name__ == '__main__':
     main()

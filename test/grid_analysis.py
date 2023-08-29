@@ -154,9 +154,6 @@ def calculate_grid_statistics(dataframe, Ngrid, include_features = [], return_ab
 
     return grid_df
 
-# step 3: get it to work vector field
-# s
-
 def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_range = [0,0], calculate_average = False, \
                              animate = True, frame_interval = 800, show = True):
     
@@ -208,7 +205,6 @@ def visualize_grid_statistics(grid_dataframe, feature = 'number_density', frame_
     if show:
         plt.show()
     return
-
 
 def heatmap_plotter(i, frame, Nxgrid, Nygrid, xmin, xmax, ymin, ymax, grid_len, feature, vmin, vmax, title=None):
     """
@@ -326,7 +322,6 @@ def plot_velocity_field(grid_dataframe, frame_range = [0,0], calculate_average =
     if show:
         plt.show()
 
-# the local animation function
 def animate_flow_field(i, X, Y, arr, fig, fn, Nx, Ny):
     # we want a fresh figure everytime
     fig.clf()
@@ -339,7 +334,6 @@ def animate_flow_field(i, X, Y, arr, fig, fn, Nx, Ny):
     velocity_field_plotter(X, Y, arr_vx, arr_vy, i=i)
     return
     
-
 def velocity_field_plotter(X,Y, VX, VY, i = 0, title = None):
 
     plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
@@ -353,174 +347,16 @@ def velocity_field_plotter(X,Y, VX, VY, i = 0, title = None):
 
 
 def main():
-    #df = pd.read_csv('../resources/epi500_sample_images_spots.csv')
+
     df = pd.read_csv('../resources/CellSegmentationTracker_spots.csv')
-    print(df.info())
-    t1 = time.time()
     grid_df = calculate_grid_statistics(df, Ngrid = 15, return_absolute_cell_counts=True, include_features=[], save_csv = False,)
-    t2 = time.time()
-
-    print(f'Time elapsed for grid calc: {t2 - t1:.2f} s')
-
-
-   # visualize_grid_statistics(grid_df, feature = 'number_density', calculate_average = False, frame_range=[0,5], \
-    #                          animate=False, frame_interval=2000, show = True)
 
     plot_velocity_field(grid_df, frame_range = [0,5], calculate_average = True, \
                                 animate = True, frame_interval = 2000, show = True)
 
-   # print(grid_df.loc[15:])
-
-    grid_columns = ['Frame', 'T', 'Ngrid','xmin', 'xmax', 'ymin', 'ymax', 'number_density','mean_velocity_X','mean_velocity_Y']
-
-
-
-
-   # visualize_grid_statistics(grid_df, feature = 'number_density', calculate_average = False, frame_range=[0,5], \
-    #                          animate=True, frame_interval=2000, show = True)
- 
-
-    if 0:
-
-        xmin, xmax = grid_df['xmin'].min(), grid_df['xmax'].max()
-        ymin, ymax = grid_df['ymin'].min(), grid_df['ymax'].max()
-        Nsquares = grid_df['Ngrid'].max() + 1
-
-        feature = 'number_density'
-        Lx, Ly = xmax - xmin, ymax - ymin
-        grid_len = grid_df['xmax'].loc[0] - grid_df['xmin'].loc[0]
-
-        # Calculate number of grid squares in x and y direction
-        if Ly < Lx:
-            Nygrid = int(np.round(Ly / grid_len))
-            Nxgrid = int(np.round(Nsquares / Nygrid) )
-        elif Lx <= Ly:
-            Nxgrid = int(np.round(Lx / grid_len))
-            Nygrid = int(np.round(Nsquares / Nxgrid) )
-    
-        print(Nxgrid, Nygrid, Nsquares, int(Ly / grid_len), Lx / grid_len)
-
-        vmin = grid_df[feature].min()
-        vmax = grid_df[feature].max()
-
-        def heatmap_plotter(i, frame):
-
-            # reshape to grid
-            arr_grid = np.flip(frame.reshape(Nxgrid, Nygrid).T, axis = 0)
-
-            xticklabels = np.round(np.linspace(xmin, xmax, Nxgrid) + grid_len / 2, 2) 
-            yticklabels = np.round(np.linspace(ymax, ymin, Nygrid) + grid_len / 2, 2)
-            ax = sns.heatmap(arr_grid, cmap = 'viridis', xticklabels=xticklabels,\
-                            yticklabels=yticklabels, vmin=vmin, vmax=vmax)
-            ax.set(xlabel = 'x', ylabel = 'y', title = f'{feature.capitalize()} heatmap for frame = {i}')
-
-        animate(grid_df.loc[:, ['T', 'Ngrid', feature]].values, heatmap_plotter, (0,1), inter=800, show=True)
-
-
-    # x_ticks = np.round(np.linspace(xmin, xmax, Nxgrid),2)
-        #y_ticks = np.round(np.linspace(ymin, ymax, Nygrid),2)
-
-        #ax.set_xticks(ticks = np.arange(Nxgrid),labels=x_ticks)
-        #ax.set_yticks(ticks = np.arange(Nygrid), labels=y_ticks)
-  
-        plt.show()
-
-        
-        print(arr_grid)
-        print(arr_grid.shape)
-        print(arr_grid.sum())
-
-
-    if 0:
- 
-        Nframes = int(data[:,0].max() + 1)
-        #Nframes = data
-
-        xmin, xmax = data[:,1].min(), data[:,1].max()
-        ymin, ymax = data[:,2].min(), data[:,2].max()
-
-        Lx = xmax - xmin
-        Ly = ymax - ymin
-
-        Nygrid = 50
-
-        dy = Ly / Nygrid
-        dA = dy**2
-
-        Residual_x = Lx % dy
-        Nxgrid = int(np.floor(Lx / dy))
-        Nsquares = Nxgrid * Nygrid
-
-        xmin += Residual_x / 2
-        xmax -= Residual_x / 2
-        Lx = xmax - xmin
-
-
-    
-        columns = ['Frame','Ngrid','xmin', 'xmax', 'ymin', 'ymax', 'density','grid_VELOCITY_X','grid_VELOCITY_Y']
-        grid_arr = np.zeros([Nframes * Nsquares, len(columns)])
-
-        ### HANDLE NANS!!!
-
-        t1 = time.time()
-        for i, frame in enumerate(np.arange(Nframes)):
-            arr_T = data[data[:, 0] == frame]
-            Ngrid = 0
-            
-            for j, x in enumerate(np.linspace(xmin, xmax - dy, Nxgrid)):
-                mask = (arr_T[:, 1] >= x) & (arr_T[:, 1] < x + dy)
-                arr_X = arr_T[mask]
-        
-                for k, y in enumerate(np.linspace(ymin, ymax - dy, Nygrid)):
-                    mask = (arr_X[:, 2] >= y) & (arr_X[:, 2] < y + dy)
-
-                    density = mask.sum()  / dA
-                    vx = np.nanmean(arr_X[mask, 3])
-                    vy = np.nanmean(arr_X[mask, 4])
-
-                    grid_arr[frame * Nsquares + Ngrid] = [frame, Ngrid, x, x + dy, y, y + dy, density, vx, vy]
-                    Ngrid += 1
-
-        t2 = time.time()
-        print(f'Time elapsed: {t2 - t1:.2f} s')
-        
-            
-        print(grid_arr[:20])
-        print(grid_arr.shape)
-        print(grid_arr[-20:]    )
-        grid_df = pd.DataFrame(grid_arr, columns = columns)
-
-        print(grid_df.info())
-        print(grid_df.head())
-        print(grid_df.describe())
-        
-    
-
 if __name__ == '__main__':
     main()
 
-
-
-
-"""
-for j, x in enumerate(np.linspace(xmin, xmax, Nxgrid - 1)):
-            interval = pd.IntervalIndex([pd.Interval(x, x + dy, closed='both')])
-            mask = df_T['X'].apply(lambda x: x in interval)
-            df_X = df_T.loc[mask]
-            for k, y in enumerate(np.linspace(ymin, ymax, Nygrid - 1)):
-                
-                interval = pd.IntervalIndex([pd.Interval(y, y + dy, closed='both')])
-                mask = df_X['Y'].apply(lambda x: x in interval)
-                df_XY = df_X.loc[mask]
-                Nspots = len(df_XY.index)
-                density = Nspots / dA
-                vx = x + dy / 2
-                vy = y + dy / 2
-                grid_df.loc[j*Nygrid + k] = [frame, Nspots, x, x + dy, y, y + dy, density, vx, vy]
-
-
-           
-"""
 
 
 

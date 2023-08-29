@@ -1,5 +1,5 @@
 # Author: Simon Guldager Andersen
-# Date (latest update): 
+# Date (latest update): 2023-08-29
 
 # This script contains all the helper functions needed in CellSegmentationTracker.py
 

@@ -221,29 +221,23 @@ def main():
         output_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\20.09.22_698x648\\im2_seg.npy"
         dat = np.load(output_path, allow_pickle=True).item()
 
-        #fig = plt.subplots()
-    #  mask_RGB = plot.mask_overlay(dat['img'], dat['masks'], colors=np.array(dat['colors']))
         plt.imshow(dat['img'])
-    # print(dat['masks'].shape)
+
         mask = np.argwhere(dat['masks'] != 0)
 
         outlines = utils.outlines_list(dat['masks'])
-
-        #print(type(outlines))
-    # print(outlines[0].shape)
-        #print(dat['masks'][600:620,500:510])
         numbers = 0
-        #print(dat['img'].shape)
 
-        if 1:
-            # plot image with outlines overlaid in red
-            outlines = utils.outlines_list(dat['masks'])
-            plt.imshow(dat['img'])
-            for o in outlines[0:100]:
-                Nskip = 4
-                range = np.arange(0, o.shape[0], Nskip)
-                numbers += len(range) * 2
-                plt.plot(o[range,0], o[range,1],)# color='r')
+
+
+        # plot image with outlines overlaid in red
+        outlines = utils.outlines_list(dat['masks'])
+        plt.imshow(dat['img'])
+        for o in outlines[0:100]:
+            Nskip = 4
+            range = np.arange(0, o.shape[0], Nskip)
+            numbers += len(range) * 2
+            plt.plot(o[range,0], o[range,1],)# color='r')
 
         print("Numbers in image and outlines: ", dat['img'].shape[0] * dat['img'].shape[1], numbers)
 

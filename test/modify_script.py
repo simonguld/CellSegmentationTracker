@@ -31,7 +31,6 @@ def prepend_text_to_file(file_path, text):
         file.close()
     return
 
-
 def search_and_modify_file(file_path, search_string, modify_string):
     """
     Search for a string in a file and replace it with another string.

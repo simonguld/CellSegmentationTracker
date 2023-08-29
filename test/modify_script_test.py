@@ -46,7 +46,7 @@ def search_and_modify_file(file_path, search_string, modify_string):
 def main():
     cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
 
-    # STEP1: Generate path name
+    # Generate path name
     cp_dir = os.path.dirname(cellpose_python_filepath)
     dir = os.path.join(cp_dir, 'Lib', 'site-packages', 'cp_copy')
 
@@ -67,9 +67,6 @@ def main():
 
 
     flow_param, cellprop_param = 0.3, -0.5
-    # STEP 0: gen file to hold target values (both places)
-    
-
 
     #TRY ON JUST ONE FILE
     # STEP 1: Preprend text to file
@@ -85,7 +82,6 @@ def main():
             search_and_modify_file(model_path, search_string, replace_string)
 
     # Then do it for the rest
-
     if not os.path.isfile(os.path.join(dir,'params.txt')):
         np.savetxt(os.path.join(dir,'params.txt'), np.array([flow_param, cellprop_param]))
         for path in paths:
