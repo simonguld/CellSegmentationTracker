@@ -242,7 +242,6 @@ class CellSegmentationTracker:
 
     #### Private methods ####
     
-
     def __generate_title(self, feature, feature_unit = None):
         """
         Generate title for plots.
