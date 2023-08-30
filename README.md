@@ -255,18 +255,19 @@ can be used for postprocess analysis
 
 
 **Attributes:**
-- **img_folder: (str)** - The path to the .tif input image folder containing, if provided
-- **xml_path: (str)** - The path to the TrackMate XML file, if provided. If generated, it will be saved in the image folder
-- **output_folder: (str)** - The path to the folder where output files will be saved.
-- **cellpose_dict: (dict)** - A dictionary containing the parameters passed to the Cellpose segmentation algorithm
-- **trackmate_dict: (dict)** - A dictionary containing the parameters passed to the TrackMate LAPTracker
-- **cellpose_default_values: (dict)** - A dictionary containing the default values for the parameters passed to the Cellpose segmentation algorithm
-- **trackmate_default_values: (dict)** - A dictionary containing the default values for the parameters passed to the TrackMate LAPTracker  
-- **pretrained_models: (list)** - A list of the pretrained Cellpose models available for segmentation
-- **spots_df: (pandas.DataFrame)** - A dataframe containing the spot data from the TrackMate XML file
-- **tracks_df: (pandas.DataFrame)** - A dataframe containing the track data from the TrackMate XML file
-- **edges_df: (pandas.DataFrame)** - A dataframe containing the edge data from the TrackMate XML file
-- **grid_df: (pandas.DataFrame)** - A dataframe containing the grid data, if generated
+- **img_folder: (str)** - path to the .tif input image folder containing, if provided
+- **xml_path: (str)** - path to the TrackMate XML file, if provided. If generated, it will be saved in the image folder
+- **output_folder: (str)** - path to the folder where output files will be saved.
+- **cellpose_dict: (dict)** - dictionary containing the parameters passed to the Cellpose segmentation algorithm
+- **trackmate_dict: (dict)** - dictionary containing the parameters passed to the TrackMate LAPTracker
+- **cellpose_default_values: (dict)** - dictionary containing the default values for the parameters passed to the Cellpose segmentation algorithm
+- **trackmate_default_values: (dict)** - dictionary containing the default values for the parameters passed to the TrackMate LAPTracker  
+- **pretrained_models: (list)** - list of the pretrained Cellpose models available for segmentation
+- **spots_df: (pandas.DataFrame)** - dataframe containing the spot data from the TrackMate XML file
+- **tracks_df: (pandas.DataFrame)** - dataframe containing the track data from the TrackMate XML file
+- **edges_df: (pandas.DataFrame)** - dataframe containing the edge data from the TrackMate XML file
+- **grid_df: (pandas.DataFrame)** - dataframe containing the grid data, if generated
+- - **msd_df: (pandas.DataFrame)** - dataframe containing the MSD, if generated
     
 
 
@@ -338,7 +339,25 @@ Parameters:
 ```python
 calculate_msd(max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True)
 ```
-Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval. For each frame interval, the MSD is calculated as the average of the squared displacements of all particles relative to their positions at the start of the frame interval for all possible starting points in time. (See for reference <a align="left"><a href="https://journals.aps.org/prx/pdf/10.1103/PhysRevX.10.011016">this paper,</a></a>)
+Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval. For each frame interval, the MSD is calculated as the average of the squared displacements of all particles relative to their positions at the start of the frame interval for all possible starting points in time.
+
+Parameters:
+- **max_frame_interval : (int, default = None)**
+    - maximum frame interval to calculate the MSD for. If None, the maximum frame interval is set to the number of frames - 1, which is the maximum.
+- **Ndof : (int, default = 1)**
+    - number of degrees of freedom used to calculate the standard deviation on the MSD.
+- **save_csv : (bool, default=True)**
+    - if True, the grid dataframe is saved as a csv file.
+- **name : (string, default = None)**
+    - name of the csv file. If None, the name of the image file is used. It will be saved in the output_folder, if provided, 
+                                     otherwise in the image folder
+- **plot : (bool, default=True)**
+    - if True, the MSD is plotted
+- **show : (bool, default=True)**
+    - if True, the figures are shown
+
+Returns --> grid_df:
+- **msd_df : (pandas DataFrame)** - dataframe containing the MSD for each frame interval up to the maximum frame interval.
 
 
 ```python
@@ -392,7 +411,7 @@ Parameters:
 - **frame_interval : (int, default=1200)**
     - time between frames in ms (for the animation).
 - **show : (bool, default=True)**
-    - of True, the figures are shown
+    - if True, the figures are shown
 
 
 ```python
