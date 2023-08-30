@@ -313,7 +313,7 @@ def trackmate_xml_to_csv(trackmate_xml_path, include_spot_features_list = None, 
         df_spots['Velocity_X'] = np.nan
         df_spots['Velocity_Y'] = np.nan
 
-        for track in np.arange(df_spots['TRACK_ID'].max()):
+        for track in np.arange(df_spots['TRACK_ID'].max() + 1):
             idx = df_spots.index[df_spots['TRACK_ID'] == track]
             df_spots_res = df_spots.loc[idx].copy()
 

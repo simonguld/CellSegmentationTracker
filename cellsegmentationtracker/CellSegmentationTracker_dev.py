@@ -268,6 +268,7 @@ class CellSegmentationTracker:
         self.tracks_df = None
         self.edges_df = None
         self.grid_df = None
+        self.msd_df = None
 
         self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500', 'EPI6000']
 
@@ -324,6 +325,23 @@ class CellSegmentationTracker:
                 return feature.capitalize() if feature_unit is None else feature.capitalize() + rf" ({feature_unit})"
             else:
                 return split_features[1].capitalize() if feature_unit is None else split_features[1].capitalize() + rf" ({feature_unit})"
+
+    def __generate_filename(self, name, append = None):
+        """
+        Generate filename for csv files.
+        """
+
+        if name is None:
+            try:
+                name = os.path.basename(self.__img_path).strip(".tif")
+            except:
+                name = 'CellSegmentationTracker'
+            name = name + append if append is not None else name
+        else:
+            if not name.endswith('.csv'):
+                name = name + '.csv'
+
+        return name
 
     def __prepare_images(self):
         """
@@ -524,11 +542,7 @@ class CellSegmentationTracker:
         name : (str, default = None) - name of csv files. If None, the name of the image file is used.
 
         """
-        if name is None:
-            try:
-                name = os.path.basename(self.__img_path).strip(".tif")
-            except:
-                name = 'CellSegmentationTracker'
+        name = self.__generate_filename(name)
         print("\n")
         if self.spots_df is not None:
             path_out_spots = os.path.join(self.output_folder, name + '_spots.csv')
@@ -550,11 +564,15 @@ class CellSegmentationTracker:
         """
   
         # Extract relevant data from dataframe as array
-        cols = ['Frame', 'X', 'Y']
+        cols = ['Frame', 'X', 'Y', 'TRACK_ID']
         data = self.spots_df.loc[:, cols].values.astype('float')
 
-        # Create empty array to store grid data
         self.__Nframes = int(data[:,0].max() + 1)
+
+        if self.__Nspots is None:
+            self.__Nspots = data.shape[0]
+        if self.__Ntracks is None:
+            self.__Ntracks = int(data[:, -1].max() + 1)
         
         self.__grid_dict['xmin'], self.__grid_dict['xmax'] = data[:,1].min(), data[:,1].max()
         self.__grid_dict['ymin'], self.__grid_dict['ymax'] = data[:,2].min(), data[:,2].max()
@@ -833,7 +851,7 @@ class CellSegmentationTracker:
         
         self.__Nspots = len(self.spots_df)
         self.__Ntracks = len(self.tracks_df)
-        self.__Nframes = self.spots_df['Frame'].max() + 1
+        self.__Nframes = int(self.spots_df['Frame'].max() + 1)
 
         if save_csv_files:
             self.__save_csv(name)
@@ -892,7 +910,7 @@ class CellSegmentationTracker:
             self.__Nspots = len(self.spots_df)
         print("Total no. of spots: ", self.__Nspots)
         if self.__Nframes is None:
-            self.__Nframes = self.spots_df['Frame'].max() + 1
+            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
         print("Average no. of spots per frame: ", self.__Nspots / self.__Nframes)
      
         # Calculate average values of spot observables
@@ -966,16 +984,6 @@ class CellSegmentationTracker:
         grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
         """
 
-        if name is None:
-            try:
-                name = os.path.basename(self.__img_path).strip(".tif")
-            except:
-                name = 'CellSegmentationTracker'
-            name = name + '_grid_stats.csv'
-        else:
-            if not name.endswith('.csv'):
-                name = name + '.csv'
-
         cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
         add_to_grid = []
         for feature in include_features:
@@ -1031,7 +1039,9 @@ class CellSegmentationTracker:
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
         
         if save_csv:
+            name = self.__generate_filename(name, append = '_grid_statistics.csv')
             self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("Grid dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
 
         return self.grid_df
 
@@ -1277,14 +1287,103 @@ class CellSegmentationTracker:
         else:
             return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
 
+    def calc_weighted_mean(self, x, dx):
+        """
+        returns: weighted mean, error on mean, Ndof, Chi2, p_val
+        """
+        assert(len(x) > 1)
+        assert(len(x) == len(dx))
+        
+        var = 1 / np.sum(1 / dx ** 2)
+        mean = np.sum(x / dx ** 2) * var
+
+        # Calculate statistics
+        Ndof = len(x) - 1
+        chi2 = np.sum((x - mean) ** 2 / dx ** 2)
+        #p_val = stats.chi2.sf(chi2, Ndof)
+
+        return mean, np.sqrt(var), #Ndof, chi2, p_val
+
+    def calculate_msd(self, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
+        """
+        Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval.
+        For each frame interval, the MSD is calculated as the average of the squared displacements of all particles 
+        relative to their positions at the start of the frame interval for all possible starting points in time.
+
+        Parameters:
+        -----------
+        max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
+                             If None, the maximum frame interval is set to the number of frames - 1.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+        plot : (bool, default = True) - if True, the MSD is plotted.
+        show : (bool, default = True) - if True, the plot is shown.
+
+        Returns:
+        --------
+        msd_df : pandas dataframe - dataframe containing the MSD for each frame interval up to the maximum frame interval.
+
+        """
+        
+        if self.__Nframes is None:
+            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+        if self.__Ntracks is None:
+            self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
+
+        max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
+    
+        if max_frame_interval < 1:
+            print("\nFrame interval must be a positive integer\n")
+            return
+
+        cols = ['TRACK_ID', 'X', 'Y',]
+        # Extract relevant data from dataframe as array
+        data = self.spots_df.loc[:, cols].values.astype('float')
+        time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
+
+        msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
+ 
+        for frame_interval in np.arange(1, max_frame_interval + 1):
+            msd_list = []
+
+            for track in np.arange(self.__Ntracks):
+                arr = data[data[:, 0] == track]
+
+                if len(arr) > frame_interval:
+                    msd_vec = (np.linalg.norm(arr[frame_interval:, 1:] - arr[:-frame_interval, 1:], axis = 1))**2
+                    msd_list.append(np.mean(msd_vec))
+                    
+            mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
+            msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
+
+        if save_csv:
+            name = self.__generate_filename(name, append = '_msd.csv')
+            msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("MSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+        if plot:
+            fig, ax = plt.subplots()
+            ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                xlabel = 'Frame interval'
+            else:
+                xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+
+            ax.set(xlabel = xlabel, ylabel = rf"MSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            if show:
+                plt.show()
+
+        self.msd_df = msd_df
+        return msd_df
 
 
   
     # test
-    # include some kind of check eq. thingy
-    # test
-    # include error estimates
-    # make plotter, possibly log. with hyperuniform line
+
 
 
 
@@ -1305,12 +1404,12 @@ def main():
     im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
     show_output = True
     cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
-
+    
     # xml_path, outfolder, use_model = cyto2,nuclei, 
     xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
     xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
-    output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
-    
+   # output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
+    output_path = os.path.dirname(xml_path)
     path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
     new_path = path.strip(".tif") + "_resized.tif"
 
@@ -1319,6 +1418,7 @@ def main():
     pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
     
     xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
+    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
 
     dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
     image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
@@ -1329,24 +1429,39 @@ def main():
                                                     'physical_time_unit_name': 'min',
         }
 
-    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_directory, \
+    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, image_folder_path=image_path, output_folder_path=output_path, \
                                 show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
     t1= time.time()
-   # cst.run_segmentation_tracking()
+    cst.run_segmentation_tracking()
     t2= time.time()
     print("RUNTIME: ", np.round(t2-t1))
     cst.generate_csv_files()
+  #  cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+
 
     cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
     cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
     cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
-                                  calculate_average=False, animate=True)
+                                calculate_average=False, animate=True)
+
+    msd_df = cst.calculate_msd(max_frame_interval = None,)
+
+    print(msd_df.head())
+    print(msd_df.tail())
+    print(msd_df.info())
+    print(msd_df.describe())
+
+ 
+    if 0:
+        cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
+        cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
+        cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
+                                    calculate_average=False, animate=True)
 
 
-    cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,3], calculate_average = True, \
+        cst.plot_velocity_field(mode = 'streamlines', frame_range = [0,3], calculate_average = True, \
                                 animate = False, frame_interval = 1200, show = True)
 
-    if 0:
 
         cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
         cst.plot_feature_over_time(spot_feature = 'Radius', spot_feature_unit = r'$\mu$m')
