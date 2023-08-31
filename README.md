@@ -487,7 +487,7 @@ Project Link: [https://github.com/simonguld/CellSegmentationTracker.git](https:/
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-* <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/654165">Asst. Prof. Amin Doostmohammadi, University of Copenhagen,</a></a> for conceiving the idea for this project, and for providing me with guidance and valuable insights along the way.
+* <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/654165">Assoc. Prof. Amin Doostmohammadi, University of Copenhagen,</a></a> for conceiving the idea for this project, and for providing me with guidance and valuable insights along the way.
 * <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/387701">Asst. Prof. Natascha Leijnse, University of Copenhagen,</a></a> for testing the module, providing data to train the models, and for illuminating which methods and features would be useful for biophysicists working with this kind of data. 
 * <a align="left"><a href="https://nbi.ku.dk/english/staff/?pure=en/persons/760892">Ph.d. Fellow Valeriia Grudtsyna, University of Copenhagen,</a></a> for for testing the module, providing data to train the models, and for illuminating which methods and features would be useful for biophysicists working with this kind of data. 
 * <a align="left"><a href="https://forskning.ku.dk/soeg/result/?pure=da%2Fpersons%2Fmari-tolonen(07bd9ae5-3531-4e88-9259-e67ef38856b8).html">Ph.d. Fellow Mari Tolonen, University of Copenhagen, </a></a> for providing valuable advice on tracking and segmentation in general.
