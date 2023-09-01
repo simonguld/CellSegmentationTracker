@@ -1,4 +1,5 @@
-import os   
+import os
+import sys   
 
 import pandas as pd
 from matplotlib import rcParams
@@ -24,63 +25,40 @@ def get_imlist(path, format = '.jpg'):
 
 
 
-img_folder = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data"
+img_folder = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\data\\16.06.23_stretch_data"
 
 
 im_list = get_imlist(img_folder, format = '.tif')
 
 
 
-## Set paths to executables:
-# Set the path to the cellpose folder. It can be found in the virtual environment created for
-#running cellpose. 
-# On windows, it typically found in
-#  ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
-# On MAC, it is typically found in 
-# ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
 cellpose_folder_path = \
   'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\Lib\\site-packages\\cellpose'
 imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
 
-
-#  If you want to do segmentation and tracking, you need to provide paths to 
-# ImageJ and Cellpose. 
-# If you already have an xml file and just want to use CellSegmentationTracker to generate
-# csv files, calculate velocities or analyse the results, you don't have to provide these
 cellpose_python_filepath = \
   'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
 
-# Set path to .tif image file (or folder with images). If you already have an xml file, 
-# you don't have to provide it
 image_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.tif"
 
-# If you have already done segmentation and tracking, you can simply provide the path
-#  to the xml file.
-xml_path = None 
-
-# Set path to output folder. If None, results will be outputted in the same folder
-#  as the image.
-output_folder_path = None
 
 # Set whether to use a pretrained model or not. If not, you need to provide the path
 #  to a custom model
-use_model = 'EPI2500'
+use_model = 'EPI6000'
 custom_model_path = None
 
 # Set whether to open Fiji and show the segmentation and tracking results. 
 # If you choose to show the results, you must close the window before the program
 #  can continue
-show_segmentation = True
-
+show_segmentation = False
+output_folder = img_folder
 # Set cellpose and trackmate settings. If you don't provide any, the default settings
 #  will be used
 cellpose_dict = {
           'TARGET_CHANNEL' : 0,
           'OPTIONAL_CHANNEL_2': 0,
-          'FLOW_THRESHOLD': 0.5, 
-          'CELLPROB_THRESHOLD': -1.0,
           'CELL_DIAMETER': 0.0, # If 0.0, the diameter will be estimated by Cellpose
-          'USE_GPU': False,
+          'USE_GPU': True,
           'SIMPLIFY_CONTOURS': True
           }
 
@@ -94,27 +72,27 @@ trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
                                         'ALLOW_TRACK_MERGING': False,
             }
 
-
-
 # Now having set all parameters, we are ready to initialise the CellSegmentationTracker
 #  object:
+if 0:
+  xml_path=im_list[1].strip('.tif') + '.xml'
+  cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
+      cellpose_python_filepath = cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_folder, \
+        use_model = use_model, custom_model_path = custom_model_path,\
+        show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
+          trackmate_dict = trackmate_dict,)
 
+cst.generate_csv_files()
+if 1:
+  for im_path in [im_list[2]]:
+      cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
+      cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
+        use_model = use_model, custom_model_path = custom_model_path,\
+        show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
+          trackmate_dict = trackmate_dict,)
+      
+      cst.run_segmentation_tracking()
 
-
-
-
-
-
-for im_path in im_list:
-    cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
-    cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
-      xml_path = xml_path, output_folder_path = output_folder_path,\
-      use_model = use_model, custom_model_path = custom_model_path,\
-      show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
-        trackmate_dict = trackmate_dict,)
-    
-    cst.run_segmentation_tracking()
-
-    df_spots, df_tracks, df_edges = \
-    cst.generate_csv_files()
+      df_spots, df_tracks, df_edges = \
+      cst.generate_csv_files()
 

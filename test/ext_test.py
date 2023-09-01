@@ -44,7 +44,7 @@ output_folder_path = None
 
 # Set whether to use a pretrained model or not. If not, you need to provide the path
 #  to a custom model
-use_model = 'EPI2500'
+use_model = 'EPI6000'
 custom_model_path = None
 
 # Set whether to open Fiji and show the segmentation and tracking results. 

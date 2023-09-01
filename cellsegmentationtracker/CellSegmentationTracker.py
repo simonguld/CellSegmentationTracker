@@ -406,8 +406,8 @@ class CellSegmentationTracker:
 
             # wait for xml file to be created
             try:
-                while not os.path.isfile(self.xml_path):
-                    time.sleep(3)
+                while not os.path.isfile(os.path.join(self.__class_path, 'cst_analysis_completed.txt')):
+                    time.sleep(5)
                     continue
             except: 
                 KeyboardInterrupt
@@ -415,6 +415,9 @@ class CellSegmentationTracker:
 
             # kill subprocess
             pipe.kill()
+
+            # remove file
+            os.remove(os.path.join(self.__class_path, 'cst_analysis_completed.txt'))
 
             # print output
             print(pipe.communicate()[0].decode('ascii'))
@@ -888,7 +891,7 @@ class CellSegmentationTracker:
 
         return
 
-    def calculate_grid_statistics(self, Ngrid, include_features = [],\
+    def calculate_grid_statistics(self, Ngrid = None, include_features = [], \
                                save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
@@ -898,9 +901,11 @@ class CellSegmentationTracker:
 
         Parameters:
         ----------
-        Ngrid : int - number of grid squares in the smallest dimension. \
+        Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square.
+                with the restriction that the grid squares are square. If None, the number of grid squares is set to be
+                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
+                4 cells per grid square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
                             in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
                             mean_velocity_X and mean_velocity_Y.
@@ -928,6 +933,20 @@ class CellSegmentationTracker:
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
+        av_diameter = 2 * self.spots_df['Radius'].mean()
+        Lx = self.spots_df['X'].max() - self.spots_df['X'].min()
+        Ly = self.spots_df['Y'].max() - self.spots_df['Y'].min()
+
+        # Print information about the length scales
+        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
+        print("Image size: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
+        
+        # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
+        if Ngrid is None:
+            Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
+            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial\n\
+dimension and twice the average cell diameter: ", Ngrid)
+            
         # Initialize grid dictionary
         self.__initialize_grid(Ngrid)
 
@@ -969,10 +988,13 @@ class CellSegmentationTracker:
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
         
+        # Print average number of cells per grid
+        print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+
         if save_csv:
             name = self.__generate_filename(name, append = '_grid_statistics.csv')
             self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
-            print("Grid dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+            print("\nGrid dataframe saved as csv file at: ", os.path.join(self.output_folder, name),)
 
         return self.grid_df
 

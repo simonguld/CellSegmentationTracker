@@ -307,6 +307,7 @@ class CellSegmentationTracker:
         self.__Nframes = None
         self.__convert_time_to_physical_units = False
 
+        self.__unit_conversion()
 
     #### Private methods ####
     
@@ -475,8 +476,8 @@ class CellSegmentationTracker:
 
             # wait for xml file to be created
             try:
-                while not os.path.isfile(self.xml_path):
-                    time.sleep(3)
+                while not os.path.isfile(os.path.join(self.__class_path, 'cst_analysis_completed.txt')):
+                    time.sleep(5)
                     continue
             except: 
                 KeyboardInterrupt
@@ -484,6 +485,9 @@ class CellSegmentationTracker:
 
             # kill subprocess
             pipe.kill()
+
+            # remove file
+            os.remove(os.path.join(self.__class_path, 'cst_analysis_completed.txt'))
 
             # print output
             print(pipe.communicate()[0].decode('ascii'))
@@ -498,40 +502,47 @@ class CellSegmentationTracker:
         units of physical quantities to physical units.
 
         """
+        if self.xml_path is None:
+            for key in self.unit_conversion_default_values.keys():
+                if key not in self.unit_conversion_dict.keys():
+                    self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+                    print(f'\n{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
+            return
+        else:
 
-        root = et.fromstring(open(self.xml_path).read())
+            root = et.fromstring(open(self.xml_path).read())
 
-        im_settings = root.find('Settings').find('ImageData') 
-        im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
-        dict_keys = ['frame_interval_in_physical_units']
-        dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
-        output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
-        im_conversion_list = []
+            im_settings = root.find('Settings').find('ImageData') 
+            im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+            dict_keys = ['frame_interval_in_physical_units']
+            dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
+            output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
+            im_conversion_list = []
 
-        print("\n")
-        for  i, s in enumerate(im_settings_list):
-            im_conversion_list.append(float(im_settings.get(s)))
-            print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
+            print("\n")
+            for  i, s in enumerate(im_settings_list):
+                im_conversion_list.append(float(im_settings.get(s)))
+                print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
 
-        for key in dict_key_names:
-            if key not in self.unit_conversion_dict.keys():
-                self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
-                print(f'{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
+            for key in dict_key_names:
+                if key not in self.unit_conversion_dict.keys():
+                    self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+                    print(f'\n{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
 
-        for key in dict_keys:
-            if key not in self.unit_conversion_dict.keys():
-                self.unit_conversion_dict[key] = im_conversion_list[-1]
-                print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
-            else: 
-                if self.unit_conversion_dict[key] != im_conversion_list[-1]:
-                    if im_conversion_list[-1] == 1:
-                        self.__convert_time_to_physical_units = True
-                        print("\nUsing time unit conversion: Time between frames = ", \
-                              self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
-                    else:
-                        print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
-                        self.unit_conversion_dict[key] = im_conversion_list[-1]         
-        return
+            for key in dict_keys:
+                if key not in self.unit_conversion_dict.keys():
+                    self.unit_conversion_dict[key] = im_conversion_list[-1]
+                    print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
+                else: 
+                    if self.unit_conversion_dict[key] != im_conversion_list[-1]:
+                        if im_conversion_list[-1] == 1:
+                            self.__convert_time_to_physical_units = True
+                            print("\nUsing time unit conversion: Time between frames = ", \
+                                self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
+                        else:
+                            print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
+                            self.unit_conversion_dict[key] = im_conversion_list[-1]         
+            return
 
     def __save_csv(self, name = None):
         """
@@ -957,7 +968,7 @@ class CellSegmentationTracker:
 
         return
 
-    def calculate_grid_statistics(self, Ngrid, include_features = [],\
+    def calculate_grid_statistics(self, Ngrid = None, include_features = [], \
                                save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
@@ -967,9 +978,11 @@ class CellSegmentationTracker:
 
         Parameters:
         ----------
-        Ngrid : int - number of grid squares in the smallest dimension. \
+        Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square.
+                with the restriction that the grid squares are square. If None, the number of grid squares is set to be
+                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
+                4 cells per grid square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
                             in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
                             mean_velocity_X and mean_velocity_Y.
@@ -997,6 +1010,20 @@ class CellSegmentationTracker:
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
+        av_diameter = 2 * self.spots_df['Radius'].mean()
+        Lx = self.spots_df['X'].max() - self.spots_df['X'].min()
+        Ly = self.spots_df['Y'].max() - self.spots_df['Y'].min()
+
+        # Print information about the length scales
+        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
+        print("Image size: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
+        
+        # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
+        if Ngrid is None:
+            Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
+            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial\n\
+dimension and twice the average cell diameter: ", Ngrid)
+            
         # Initialize grid dictionary
         self.__initialize_grid(Ngrid)
 
@@ -1038,10 +1065,13 @@ class CellSegmentationTracker:
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
         
+        # Print average number of cells per grid
+        print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+
         if save_csv:
             name = self.__generate_filename(name, append = '_grid_statistics.csv')
             self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
-            print("Grid dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+            print("\nGrid dataframe saved as csv file at: ", os.path.join(self.output_folder, name),)
 
         return self.grid_df
 
@@ -1381,7 +1411,70 @@ class CellSegmentationTracker:
         return msd_df
 
 
-  
+    if 0:
+        from sklearn.neighbors import KDTree
+
+        def calculate_crmsd(self, N_neighbors, max_frame_interval, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
+
+            if self.__Nframes is None:
+                self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+            if self.__Ntracks is None:
+                self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
+
+            max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
+        
+            if max_frame_interval < 1:
+                print("\nFrame interval must be a positive integer\n")
+                return
+
+            cols = ['TRACK_ID', 'X', 'Y',]
+            # Extract relevant data from dataframe as array
+            data = self.spots_df.loc[:, cols].values.astype('float')
+            time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
+
+            msd_cols = ['frame_interval', 'time_interval', 'crmsd', 'crmsd_std']
+            msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
+    
+            for frame_interval in np.arange(1, max_frame_interval + 1):
+                msd_list = []
+
+                for track in np.arange(self.__Ntracks):
+                    arr = data[data[:, 0] == track]
+
+                    if len(arr) > frame_interval:
+                        particle_displacement = arr[frame_interval:, 1:] - arr[:-frame_interval, 1:]
+                        msd_list.append(np.mean(msd_vec))
+                        
+                mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
+                msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
+
+            if save_csv:
+                name = self.__generate_filename(name, append = '_msd.csv')
+                msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
+                print("MSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+            if plot:
+                fig, ax = plt.subplots()
+                ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
+                                capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
+                if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                    xlabel = 'Frame interval'
+                else:
+                    xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+
+                ax.set(xlabel = xlabel, ylabel = rf"MSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+                if show:
+                    plt.show()
+
+            self.msd_df = msd_df
+            return msd_df
+
+
+
+
+
+
+
     # test
 
 
@@ -1392,66 +1485,165 @@ class CellSegmentationTracker:
     
 
 def main():
+
     
-    model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
-    cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
+    def get_imlist(path, format = '.jpg'):
+
+        """
+        returns a list of filenames for all png images in a directory
+        """
+        if os.path:
+            return [os.path.join(path,f) for f in os.listdir(path) if f.endswith(format)]
+        else:
+            raise OSError("No such directory: " + path)
+        
+
+    img_folder = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\data\\16.06.23_stretch_data"
+
+    im_list = get_imlist(img_folder, format = '.tif')
+
+    cellpose_folder_path = \
+    'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\Lib\\site-packages\\cellpose'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
-    cellpose_folder_path = "C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose"
 
-    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
-    input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
-    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
-    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
-    show_output = True
-    cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
-    
-    # xml_path, outfolder, use_model = cyto2,nuclei, 
-    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
-    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
-   # output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
-    output_path = os.path.dirname(xml_path)
-    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
-    new_path = path.strip(".tif") + "_resized.tif"
+    cellpose_python_filepath = \
+    'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
 
-    path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
-    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
-    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
-    
-    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
-    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
+    image_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.tif"
 
-    dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
-    image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
+    # Set whether to use a pretrained model or not. If not, you need to provide the path
+    #  to a custom model
+    use_model = 'EPI6000'
+    custom_model_path = None
 
+    # Set whether to open Fiji and show the segmentation and tracking results. 
+    # If you choose to show the results, you must close the window before the program
+    #  can continue
+    show_segmentation = False
+    output_folder = img_folder
+    # Set cellpose and trackmate settings. If you don't provide any, the default settings
+    #  will be used
+    cellpose_dict = {
+            'TARGET_CHANNEL' : 0,
+            'OPTIONAL_CHANNEL_2': 0,
+            'CELL_DIAMETER': 0.0, # If 0.0, the diameter will be estimated by Cellpose
+            'USE_GPU': True,
+            'SIMPLIFY_CONTOURS': True
+            }
+
+    # Beware that if you set ALLOW_TRACK_SPLITTING and/or ALLOW_TRACK_MERGING to True, 
+    # the calculated velocities might be incorrect, as several cells will be merged into
+    #  one track and can be present at the same time
+    trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
+                                            'GAP_CLOSING_MAX_DISTANCE': 15.0,
+                                            'MAX_FRAME_GAP': 2,
+                                            'ALLOW_TRACK_SPLITTING': False, 
+                                            'ALLOW_TRACK_MERGING': False,
+                }
+
+    # Now having set all parameters, we are ready to initialise the CellSegmentationTracker
+    #  object:
     unit_conversion_dict= {
-
+                                               #   'frame_interval_in_physical_units': 600,
                                                   'physical_length_unit_name': r'$\mu$m',
-                                                    'physical_time_unit_name': 'min',
+                                                    'physical_time_unit_name': 's',
         }
+    if 1:
+        #xml_path=im_list[1].strip('.tif') + '.xml'
+        cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
+            cellpose_python_filepath = cellpose_python_filepath, output_folder_path=output_folder, \
+                use_model = use_model, custom_model_path = custom_model_path,\
+                show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
+                trackmate_dict = trackmate_dict, unit_conversion_dict=unit_conversion_dict)
+        cst.spots_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_spots.csv')
+        cst.tracks_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_tracks.csv')
+        cst.edges_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_edges.csv')
 
-    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, image_folder_path=image_path, output_folder_path=output_path, \
-                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
-    t1= time.time()
-    cst.run_segmentation_tracking()
-    t2= time.time()
-    print("RUNTIME: ", np.round(t2-t1))
-    cst.generate_csv_files()
-  #  cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+        cst.calculate_grid_statistics(include_features=['Radius', 'Area'])
+        print(cst.grid_df['cell_number'].mean())
+        cst.visualize_grid_statistics(feature = 'cell_number', feature_unit = r'$\mu$m', \
+                                    calculate_average=False, animate=True)
+
+       # cst.generate_csv_files()
+    print(im_list[0])
+    if 0:
+        for im_path in [im_list[0]]:
+            cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
+            cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
+                use_model = use_model, custom_model_path = custom_model_path,\
+                show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
+                trackmate_dict = trackmate_dict,)
+        
+        cst.run_segmentation_tracking()
+        df_spots, df_tracks, df_edges = cst.generate_csv_files()
+
+        cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
+        cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
+        cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
+                                    calculate_average=False, animate=True)
 
 
-    cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
-    cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
-    cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
-                                calculate_average=False, animate=True)
 
-    msd_df = cst.calculate_msd(max_frame_interval = None,)
+    if 0:
+        model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
+        cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
+        imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
+        cellpose_folder_path = "C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose"
 
-    print(msd_df.head())
-    print(msd_df.tail())
-    print(msd_df.info())
-    print(msd_df.describe())
+        image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
+        input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
+        image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
+        im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
+        show_output = True
+        cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
+        
+        # xml_path, outfolder, use_model = cyto2,nuclei, 
+        xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
+        xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
+    # output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
+        output_path = os.path.dirname(xml_path)
+        path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+        new_path = path.strip(".tif") + "_resized.tif"
 
- 
+        path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
+        pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
+        pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
+        
+        xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
+        xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
+
+        dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
+        image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
+
+        unit_conversion_dict= {
+
+                                                    'physical_length_unit_name': r'$\mu$m',
+                                                        'physical_time_unit_name': 'min',
+            }
+
+        cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, image_folder_path=image_path, output_folder_path=output_path, \
+                                    show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
+        t1= time.time()
+        cst.run_segmentation_tracking()
+        t2= time.time()
+        print("RUNTIME: ", np.round(t2-t1))
+        cst.generate_csv_files()
+    #  cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+
+
+        cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
+        cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
+        cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
+                                    calculate_average=False, animate=True)
+
+        msd_df = cst.calculate_msd(max_frame_interval = None,)
+
+        print(msd_df.head())
+        print(msd_df.tail())
+        print(msd_df.info())
+        print(msd_df.describe())
+
+    
     if 0:
         cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
         cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
