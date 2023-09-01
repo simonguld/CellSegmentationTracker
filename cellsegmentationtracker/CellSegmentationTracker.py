@@ -903,7 +903,7 @@ class CellSegmentationTracker:
         ----------
         Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square. If None, the number of grid squares is set to be
+                with the restriction that the grid squares are square. If None, Ngrid is set to be
                 the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
                 4 cells per grid square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
@@ -1239,23 +1239,6 @@ dimension and twice the average cell diameter: ", Ngrid)
                 density_fluctuations_std * (np.pi * window_sizes**2), window_sizes, av_defect_densities, av_numbers
         else:
             return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
-
-    def calc_weighted_mean(self, x, dx):
-        """
-        returns: weighted mean, error on mean, Ndof, Chi2, p_val
-        """
-        assert(len(x) > 1)
-        assert(len(x) == len(dx))
-        
-        var = 1 / np.sum(1 / dx ** 2)
-        mean = np.sum(x / dx ** 2) * var
-
-        # Calculate statistics
-        Ndof = len(x) - 1
-        chi2 = np.sum((x - mean) ** 2 / dx ** 2)
-        #p_val = stats.chi2.sf(chi2, Ndof)
-
-        return mean, np.sqrt(var), #Ndof, chi2, p_val
 
     def calculate_msd(self, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
         """

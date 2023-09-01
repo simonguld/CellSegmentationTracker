@@ -980,7 +980,7 @@ class CellSegmentationTracker:
         ----------
         Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square. If None, the number of grid squares is set to be
+                with the restriction that the grid squares are square. If None, Ngrid is set to be
                 the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
                 4 cells per grid square.
         include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
