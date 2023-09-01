@@ -361,16 +361,17 @@ Returns --> grid_df:
 
 
 ```python
-calculate_grid_statistics(Ngrid, include_features = [], save_csv = True, name = None)
+calculate_grid_statistics(Ngrid = None, include_features = [], save_csv = True, name = None)
 ```
 Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
 as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
 as well.
 
 Parameters:
-- **Ngrid: (int > 0)**
+- **Ngrid: (int > 0, default = None)**
     - number of grid squares in the smallest dimension. The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square.
+                with the restriction that the grid squares are square. If None, Ngrid is set to be the ratio between the smallest 
+ spatial dimension and twice the average cell diameter, yielding roughly  cells per grid square.
 - **include_features : (list of strings, default = [])**
     - list of features to include in the grid dataframe, 
                             in addition to the standard features no. of cells, number_density, mean_velocity_X and mean_velocity_Y.
