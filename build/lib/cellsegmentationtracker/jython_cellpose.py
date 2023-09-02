@@ -39,8 +39,8 @@ sys.setdefaultencoding('utf-8')
 # 	LOAD SETTINGS FROM FILE.
 # ------------------------------------------------------
 
-current_path = os.getcwd()
-file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'jython_dict.json')
+class_path = os.path.dirname(os.path.realpath(__file__))
+file_path = os.path.join(class_path, 'jython_dict.json')
 with open(file_path, 'r') as file:
         param_dict = json.load(file)
 
@@ -162,6 +162,12 @@ if show_output:
     displayer.refresh()
 
 print("Tracking and segmentation completed.")
+
+## Generate txt file confirming that the analysis is completed.
+with open(os.path.join(class_path, 'cst_analysis_completed.txt'), 'w') as file:
+        file.write('Analysis completed')
+        file.close()
+
 
 # ------------------------------------------------------
 

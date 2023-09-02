@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: cellsegmentationtracker
-Version: 0.1.5
+Version: 0.1.6
 Summary: Module for cell segmentation, tracking and subsequent (biophysical) statistical analysis
 Home-page: https://github.com/simonguld/CellSegmentationTracker
 Author: Simon Guldager Andersen

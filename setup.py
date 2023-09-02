@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cellsegmentationtracker',
-    version="0.1.5",
+    version="0.1.6",
     author='Simon Guldager Andersen',
     author_email='guldager.simon@gmail.com',
     url='https://github.com/simonguld/CellSegmentationTracker',
