@@ -25,6 +25,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import xml.etree.ElementTree as et
+from sklearn.neighbors import KDTree
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
@@ -1215,6 +1216,84 @@ dimension and twice the average cell diameter: ", Ngrid)
             plt.show()
         return
 
+    def calculate_msd(self, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
+        """
+        Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval.
+        For each frame interval, the MSD is calculated as the average of the squared displacements of all particles 
+        relative to their positions at the start of the frame interval for all possible starting points in time.
+
+        Parameters:
+        -----------
+        max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
+                             If None, the maximum frame interval is set to the number of frames - 1.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+        plot : (bool, default = True) - if True, the MSD is plotted.
+        show : (bool, default = True) - if True, the plot is shown.
+
+        Returns:
+        --------
+        msd_df : pandas dataframe - dataframe containing the MSD for each frame interval up to the maximum frame interval.
+
+        """
+        
+        if self.__Nframes is None:
+            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+        if self.__Ntracks is None:
+            self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
+
+        max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
+    
+        if max_frame_interval < 1:
+            print("\nFrame interval must be a positive integer\n")
+            return
+
+        cols = ['TRACK_ID', 'X', 'Y',]
+        # Extract relevant data from dataframe as array
+        data = self.spots_df.loc[:, cols].values.astype('float')
+        time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
+
+        msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
+ 
+        for frame_interval in np.arange(1, max_frame_interval + 1):
+            msd_list = []
+
+            for track in np.arange(self.__Ntracks):
+                arr = data[data[:, 0] == track]
+
+                if len(arr) > frame_interval:
+                    msd_vec = (np.linalg.norm(arr[frame_interval:, 1:] - arr[:-frame_interval, 1:], axis = 1))**2
+                    msd_list.append(np.mean(msd_vec))
+                    
+            mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
+            msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
+
+        if save_csv:
+            name = self.__generate_filename(name, append = '_msd.csv')
+            msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("MSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+        if plot:
+            fig, ax = plt.subplots()
+            ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                xlabel = 'Frame interval'
+            else:
+                xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+
+            ax.set(xlabel = xlabel, ylabel = rf"MSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            if show:
+                plt.show()
+
+        self.msd_df = msd_df
+        return msd_df
+
+
+
     def get_density_fluctuations(self, Nwindows = 10, frame_range = [0,0], return_absolute_cell_counts = False,):
         """
         Calculate defect density fluctuations for different (circular) window sizes (radii). 
@@ -1317,99 +1396,200 @@ dimension and twice the average cell diameter: ", Ngrid)
         else:
             return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
 
-    def calc_weighted_mean(self, x, dx):
+    
+    def calc_density_fluctuations_for_frame(self, points_arr, window_sizes, N_center_points = None, Ndof = 1, x_boundaries = None, y_boundaries = None, normalize = False):
         """
-        returns: weighted mean, error on mean, Ndof, Chi2, p_val
-        """
-        assert(len(x) > 1)
-        assert(len(x) == len(dx))
-        
-        var = 1 / np.sum(1 / dx ** 2)
-        mean = np.sum(x / dx ** 2) * var
+        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
+        lend me his code.
 
-        # Calculate statistics
-        Ndof = len(x) - 1
-        chi2 = np.sum((x - mean) ** 2 / dx ** 2)
-        #p_val = stats.chi2.sf(chi2, Ndof)
-
-        return mean, np.sqrt(var), #Ndof, chi2, p_val
-
-    def calculate_msd(self, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
-        """
-        Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval.
-        For each frame interval, the MSD is calculated as the average of the squared displacements of all particles 
-        relative to their positions at the start of the frame interval for all possible starting points in time.
+        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes. 
+        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
+        and calculating the number of points within a circle of radius R for each of these points, from which
+        the number and density variance can be calculated.
 
         Parameters:
         -----------
-        max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
-                             If None, the maximum frame interval is set to the number of frames - 1.
-        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
-        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
-                It will be saved in the output_folder, if provided, otherwise in the image folder.
-        plot : (bool, default = True) - if True, the MSD is plotted.
-        show : (bool, default = True) - if True, the plot is shown.
+        points_arr : (numpy array) - Array of points in 2D plane
+        window_sizes : (numpy array or list) - Array of window sizes (i.e. radii) for which to calculate density fluctuations
+        N_center_points : (int) - Number of center points to use for each window size. If None, all points are used.
+        Ndof : (int) - Number of degrees of freedom to use for variance calculation
+        x_boundaries : (list) - List of x boundaries with the format [x_min, x_max]. If None, no boundaries are used.
+        y_boundaries : (list) - List of y boundaries with the format [y_min, y_max]. If None, no boundaries are used.
+        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
 
         Returns:
         --------
-        msd_df : pandas dataframe - dataframe containing the MSD for each frame interval up to the maximum frame interval.
+        var_counts : (numpy array) - Array containing the number variance for each window size
+        var_densities : (numpy array) - Array containing the density variance for each window size
+    
+        """
+
+        # If N is not given, use all points
+        Npoints = len(points_arr)
+        N_center_points = len(points_arr) if N_center_points is None else N_center_points
+
+        # Initialize KDTree
+        tree = KDTree(points_arr)
+
+        # Initialize density array, density variance array and counts variance arrays
+        var_counts = np.empty_like(window_sizes, dtype=float)
+        var_densities = np.empty_like(var_counts)
+        av_counts = np.empty_like(var_counts)
+
+        for i, radius in enumerate(window_sizes):
+            ## Choose N random points
+            # If boundaries are given, only consider points whose distance to the boundary is larger than R
+            if x_boundaries is not None or y_boundaries is not None:
+                # Initialize index of allowed center points
+                indices = np.arange(Npoints)
+                if x_boundaries is not None:
+                    mask_x = (points_arr[:,0] - radius >= x_boundaries[0]) & (points_arr[:,0] + radius <= x_boundaries[1])
+                    indices = indices[mask_x]
+                if y_boundaries is not None:
+                    mask_y = (points_arr[indices, 1] - radius >= y_boundaries[0]) & (points_arr[indices, 1] + radius <= y_boundaries[1])
+                    indices = indices[mask_y]
+                # Choose N random points
+                indices = np.random.choice(indices, min(N_center_points, len(indices)), replace=False)
+            else:
+                # Choose N random points
+                indices = np.random.choice(range(Npoints), N_center_points, replace=False)
+
+            if len(indices) == 0:
+                var_counts[i] = np.nan
+                var_densities[i] = np.nan
+                av_counts[i] = np.nan
+                continue
+
+            # Initalize arrays of points to consider as center points
+            center_points = points_arr[indices]
+
+            # Calculate no. of points within circle for each point
+            counts = tree.query_radius(center_points, r=radius, count_only=True)
+
+            # Calculate average counts
+            av_counts[i] = np.mean(counts)
+
+            # Calculate number and density variance
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                var_counts[i] = np.var(counts, ddof = Ndof)
+                var_densities[i] = var_counts[i] / (np.pi * radius**2)**2
+
+        if normalize:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                av_densities = np.nanmean(av_counts / (np.pi * window_sizes**2))
+                var_densities /= av_densities**2
+
+        return var_counts, var_densities
+
+    def calc_density_fluctuations(self, window_sizes, frame_range = [0,0], N_center_points = None, Ndof = 1, normalize = False):
+        """
+        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
+        lend me his code.
+
+        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes for each frame in frame_range.  
+        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
+        and calculating the number of points within a circle of radius R for each of these points, from which
+        the number and density variance is calculated.
+
+        Parameters:
+        -----------
+
+        Returns --> (,): 
+        -------- 
+
 
         """
-        
-        if self.__Nframes is None:
-            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
-        if self.__Ntracks is None:
-            self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
+            
+        if self.grid_df is None:
+            self.calculate_grid_statistics(Ngrid = 12, save_csv=False)
+            
+        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
+        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
-        max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
-    
-        if max_frame_interval < 1:
-            print("\nFrame interval must be a positive integer\n")
-            return
-
-        cols = ['TRACK_ID', 'X', 'Y',]
         # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, cols].values.astype('float')
-        time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
+        data = self.spots_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
+        mask = (data[:, 0] >= frame_range[0]) & (data[:, 0] < frame_range[1])
+        data = data[mask]
 
-        msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
-        msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
- 
-        for frame_interval in np.arange(1, max_frame_interval + 1):
-            msd_list = []
+        # Intialize array of defect densities
+        defect_densities = np.zeros([Nframes, Nwindows])
 
-            for track in np.arange(self.__Ntracks):
-                arr = data[data[:, 0] == track]
 
-                if len(arr) > frame_interval:
-                    msd_vec = (np.linalg.norm(arr[frame_interval:, 1:] - arr[:-frame_interval, 1:], axis = 1))**2
-                    msd_list.append(np.mean(msd_vec))
-                    
-            mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
-            msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
+         # Initalize array of average defect densities
+        av_defect_densities = np.zeros(Nframes)
 
-        if save_csv:
-            name = self.__generate_filename(name, append = '_msd.csv')
-            msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
-            print("MSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+        # Define center point
+        LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
+        LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+        center = np.array([LX/2, LY/2])
 
-        if plot:
-            fig, ax = plt.subplots()
-            ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
-                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
-                xlabel = 'Frame interval'
-            else:
-                xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+        # Calculate the average radius of a spot
+        avg_radius = self.spots_df['Radius'].mean()
+        
+        # Define max. and min. window size
+        if self.__grid_dict['Ny'] <= self.__grid_dict['Nx']:
+            max_window_size = LY / 2 - 2 * avg_radius
+        elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
+            max_window_size = LX / 2 - 2 * avg_radius
 
-            ax.set(xlabel = xlabel, ylabel = rf"MSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
-            if show:
-                plt.show()
+        min_window_size = (LX / 2 ) / Nwindows
 
-        self.msd_df = msd_df
-        return msd_df
+        # Define window sizes
+        window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
 
+        # Calculate average of average defect densities
+        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
+        av_av_defect_densities = self.grid_df['number_density'].mean()
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+
+        idx = self.grid_df['number_density'].index[self.grid_df['number_density'] == 0]
+
+        av_defect_densities = np.zeros(Nframes)
+
+        for frame in np.arange(Nframes):
+            # Step 1: Get defect positions for the given frame
+            defect_positions = data[data[:, 0] == frame, -2:]
+
+            # Step 2: Calculate distance of each defect to center
+            distances = np.linalg.norm(defect_positions - center, axis=1)
+
+            # Step 3: Calculate density for each window size
+            for i, window_size in enumerate(window_sizes):
+                # Get defects within window
+                defects_in_window = len(distances[distances < window_size])
+
+                # Calculate and store density
+                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
+
+            wind = max_window_size + avg_radius
+            defects_in_window = len(distances[distances < wind])
+            av_defect_densities[frame] = defects_in_window / (np.pi * wind**2)
+            av_av_defect_densities = np.mean(av_defect_densities)
+
+        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
+        for frame in np.arange(Nframes):
+            for i, w in enumerate(window_sizes):
+                print(av_defect_densities[frame] * (np.pi * w**2), defect_densities[frame,i] * (np.pi * w**2))
+
+        # Calculate fluctuations of defect density (Ndof = 0)
+        density_fluctuations = np.sqrt(np.mean((defect_densities - \
+                                        av_av_defect_densities)**2, axis = 0))
+        density_fluctuations_std = np.sqrt(np.std((defect_densities - \
+                                        av_av_defect_densities), axis = 0,))
+
+        if return_absolute_cell_counts:
+            return density_fluctuations * (np.pi * window_sizes**2), \
+                density_fluctuations_std * (np.pi * window_sizes**2), window_sizes, av_defect_densities, av_numbers
+        else:
+            return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
+
+        
+
+
+
+    ## make a default window_szies
 
     if 0:
         from sklearn.neighbors import KDTree
