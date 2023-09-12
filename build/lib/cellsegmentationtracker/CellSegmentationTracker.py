@@ -1284,8 +1284,7 @@ dimension and twice the average cell diameter: ", Ngrid)
         # Initialize dataframe
         msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
         msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
-        print("msd shape: ", msd_df.shape, "\n")
- 
+
         # Loop over all frame intervals
         for frame_interval in np.arange(1, max_frame_interval + 1):
             msd_list = []
@@ -1322,7 +1321,6 @@ dimension and twice the average cell diameter: ", Ngrid)
                 plt.show()
 
         self.msd_df = msd_df
-        print("msd", msd_df)
         return msd_df
 
     def calculate_crmsd(self, N_neighbors = 5, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
@@ -1459,7 +1457,7 @@ dimension and twice the average cell diameter: ", Ngrid)
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Cage relative MSD')
             if show:
                 plt.show()
 
