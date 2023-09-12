@@ -270,6 +270,7 @@ class CellSegmentationTracker:
         self.edges_df = None
         self.grid_df = None
         self.msd_df = None
+        self.crmsd_df = None
 
         self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500', 'EPI6000']
 
@@ -1000,6 +1001,7 @@ class CellSegmentationTracker:
 
         cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
         add_to_grid = []
+        # Add additional features to grid (if any)
         for feature in include_features:
             if feature not in cols:
                 cols.append(feature)    
@@ -1033,6 +1035,7 @@ dimension and twice the average cell diameter: ", Ngrid)
 
         # Loop over all frames
         for i, frame in enumerate(np.arange(self.__Nframes)):
+            # Extract data for given frame
             arr_T = data[data[:, 0] == frame]
             time = arr_T[0, 3]
             Ngrid_count = 0
@@ -1104,11 +1107,13 @@ dimension and twice the average cell diameter: ", Ngrid)
             if feature in self.spots_df.columns:
                 feature = 'mean_' + feature.lower()
 
+            # Set frame range
             Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
             frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
             # Set colorbar limits
             vmin, vmax = self.grid_df[feature].min(), self.grid_df[feature].max()
 
+            # Extract relevant data from dataframe as array
             if self.grid_df is not None:
                 data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
                 data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
@@ -1127,8 +1132,6 @@ dimension and twice the average cell diameter: ", Ngrid)
                     t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                     t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                     time_label = rf'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
-
-
                     title=rf'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
                     self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
             else:             
@@ -1221,7 +1224,8 @@ dimension and twice the average cell diameter: ", Ngrid)
         Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval.
         For each frame interval, the MSD is calculated as the average of the squared displacements of all particles 
         relative to their positions at the start of the frame interval for all possible starting points in time.
-
+        See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
+  
         Parameters:
         -----------
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
@@ -1255,19 +1259,25 @@ dimension and twice the average cell diameter: ", Ngrid)
         data = self.spots_df.loc[:, cols].values.astype('float')
         time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
 
+        # Initialize dataframe
         msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
-        msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
+        print("msd shape: ", msd_df.shape, "\n")
  
+        # Loop over all frame intervals
         for frame_interval in np.arange(1, max_frame_interval + 1):
             msd_list = []
 
             for track in np.arange(self.__Ntracks):
+                # Extract data for given track
                 arr = data[data[:, 0] == track]
 
+                # Calculate MSD for given track if track is longer than frame interval
                 if len(arr) > frame_interval:
                     msd_vec = (np.linalg.norm(arr[frame_interval:, 1:] - arr[:-frame_interval, 1:], axis = 1))**2
                     msd_list.append(np.mean(msd_vec))
-                    
+
+            # Calculate average MSD for given frame interval
             mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
             msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
 
@@ -1290,9 +1300,8 @@ dimension and twice the average cell diameter: ", Ngrid)
                 plt.show()
 
         self.msd_df = msd_df
+        print("msd", msd_df)
         return msd_df
-
-
 
     def get_density_fluctuations(self, Nwindows = 10, frame_range = [0,0], return_absolute_cell_counts = False,):
         """
@@ -1396,7 +1405,6 @@ dimension and twice the average cell diameter: ", Ngrid)
         else:
             return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
 
-    
     def calc_density_fluctuations_for_frame(self, points_arr, window_sizes, N_center_points = None, Ndof = 1, x_boundaries = None, y_boundaries = None, normalize = False):
         """
         This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
@@ -1585,182 +1593,209 @@ dimension and twice the average cell diameter: ", Ngrid)
         else:
             return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
 
-        
-
-
-
-    ## make a default window_szies
-
-    if 0:
-        from sklearn.neighbors import KDTree
-
-        def calculate_crmsd(self, N_neighbors, max_frame_interval, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
-
-            if self.__Nframes is None:
-                self.__Nframes = int(self.spots_df['Frame'].max() + 1)
-            if self.__Ntracks is None:
-                self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
-
-            max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
-        
-            if max_frame_interval < 1:
-                print("\nFrame interval must be a positive integer\n")
-                return
-
-            cols = ['TRACK_ID', 'X', 'Y',]
-            # Extract relevant data from dataframe as array
-            data = self.spots_df.loc[:, cols].values.astype('float')
-            time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
-
-            msd_cols = ['frame_interval', 'time_interval', 'crmsd', 'crmsd_std']
-            msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
     
-            for frame_interval in np.arange(1, max_frame_interval + 1):
-                msd_list = []
+    def calculate_crmsd(self, N_neighbors = 5, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
+        """
+        Calculates the cage relative mean squared displacement (CRMSD) for each frame interval up to a given maximum frame interval.
+        See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
+  
+        Parameters:
+        -----------
+        N_neighbors : (int, default = 5) - number of nearest neighbors to consider when calculating the CRMSD.
+        max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
+                             If None, the maximum frame interval is set to the number of frames - 1.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+        plot : (bool, default = True) - if True, the MSD is plotted.
+        show : (bool, default = True) - if True, the plot is shown.
 
-                for track in np.arange(self.__Ntracks):
-                    arr = data[data[:, 0] == track]
+        Returns:
+        --------
+        crmsd_df : pandas dataframe - dataframe containing the CRMSD for each frame interval up to the maximum frame interval.
 
-                    if len(arr) > frame_interval:
-                        particle_displacement = arr[frame_interval:, 1:] - arr[:-frame_interval, 1:]
-                        msd_list.append(np.mean(msd_vec))
-                        
-                mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
-                msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
+        """
 
-            if save_csv:
-                name = self.__generate_filename(name, append = '_msd.csv')
-                msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
-                print("MSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+        # Initialize necessary variables
+        if self.__Nframes is None:
+            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+        if self.__Ntracks is None:
+            self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
 
-            if plot:
-                fig, ax = plt.subplots()
-                ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
-                                capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-                if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
-                    xlabel = 'Frame interval'
-                else:
-                    xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+        # Set maximum frame interval
+        max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
+    
+        if max_frame_interval < 1:
+            print("\nFrame interval must be a positive integer\n")
+            return
 
-                ax.set(xlabel = xlabel, ylabel = rf"MSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
-                if show:
-                    plt.show()
+        # Extract relevant data from dataframe as array
+        cols = ['TRACK_ID', 'Frame', 'X', 'Y',]
+        data = self.spots_df.loc[:, cols].values.astype('float')
+        time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
 
-            self.msd_df = msd_df
-            return msd_df
+        # Initialize list of crmsd values. Each element of the list contains the list of crmsd values for a given frame interval
+        msd_list = [[] for _ in range(max_frame_interval)]
+
+        # Loop over all tracks
+        for track in np.arange(self.__Ntracks):
+            # Get data for current track
+            arr = data[data[:, 0] == track]
+            Nframes = len(arr)
+
+            # Move on if gaps are present, i.e. if the frame interval is not constant
+            if len(np.unique(np.diff(arr[:, 1]))) != 1:
+                continue
+
+            # Loop over all frames
+            for i, frame in enumerate(arr[:-1, 1].astype('int')):
+                # Get point arr for current frame and exclude current track
+                data_res = data[data[:, 1] >= frame]
+                self_mask = (data_res[:, 0] == track)
+                data_res = data_res[~self_mask]
+
+                # Find the N_neighbors nearest neighbors
+                frame_mask = (data_res[:, 1] == frame)
+                tree = KDTree(data_res[frame_mask, 2:])
+
+                # Get the starting position and the positions and indices of the neighbors
+                start_pos = arr[i, 2:].reshape(-1, 2)
+                neighbor_idx = tree.query(start_pos, k = N_neighbors, return_distance = False).reshape(-1)
+                neighbor_start_pos = data_res[frame_mask, 2:][neighbor_idx]
+                neighbor_ids = data_res[frame_mask, 0][neighbor_idx]
+
+                # Find the neighbor with the shortest Nframes, and collect neighbor tracks
+                Nframes_neighbors = np.zeros(N_neighbors)
+                neighbor_pos_list = []
+                for j, neighbor_id in enumerate(neighbor_ids):
+                    # Get positions of neighbor
+                    neighbor_pos_list.append(data_res[data_res[:, 0] == neighbor_id, 2:])
+
+                    # Get number of frames before any potential gap
+                    try:
+                        Nframes_before_gap = np.min(np.where(np.diff(data_res[data_res[:, 1] == neighbor_id != 1])))
+                        Nframes_neighbors[j] = int(min(len(neighbor_pos_list[j]), Nframes_before_gap))
+                    except:
+                        Nframes_neighbors[j] = len(neighbor_pos_list[j])
+    
+                # Get the maximum number of frames to consider
+                Nframes_max = int(min(Nframes, np.min(Nframes_neighbors), max_frame_interval + 1))
+                if Nframes_max == 0:
+                    continue
+
+                # Calculate displacements of neighbors relative to their starting positions
+                delta_neighbor_arr = np.zeros([N_neighbors, Nframes_max - 1, 2])
+                for j, neighbor_pos in enumerate(neighbor_pos_list):
+                    delta_neighbor_arr[j, :, :] = neighbor_pos[1:Nframes_max] - neighbor_start_pos[j]
+
+                # Calculate the mean displacement of the neighbors
+                mean_delta_neighbor_arr = np.mean(delta_neighbor_arr, axis = 0)
+
+                # Calculate the crmsd for each frame interval
+                crmsd = np.linalg.norm(arr[i + 1: i + Nframes_max, 2:] - start_pos - mean_delta_neighbor_arr, axis = 1)**2
+
+                # Add the crmsd values to the list
+                for j, val in enumerate(crmsd):
+                    msd_list[j].append(val)
+
+        # Calculate mean and standard error of the mean for each frame interval
+        mean = []
+        std_sem = []
+        for val in msd_list:
+            mean.append(np.mean(val) if len(val) > 0 else np.nan)
+            std_sem.append(np.std(val, ddof = Ndof) / np.sqrt(len(val)) if len(val) > Ndof else np.nan)
+
+        # Create and fill dataframe
+        msd_cols = ['frame_interval', 'time_interval', 'crmsd', 'crmsd_std']
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
+        msd_df.loc[:, 'frame_interval'] = np.arange(1, max_frame_interval + 1)
+        msd_df.loc[:, 'time_interval'] = msd_df.loc[:, 'frame_interval'] * time_interval
+        msd_df.loc[:, 'crmsd'] = mean
+        msd_df.loc[:, 'crmsd_std'] = std_sem
+
+        if save_csv:
+            name = self.__generate_filename(name, append = '_crmsd.csv')
+            msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("CRMSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+        if plot:
+            fig, ax = plt.subplots()
+            ax.errorbar(msd_df['time_interval'], msd_df['crmsd'], msd_df['crmsd_std'], fmt = 'k.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                xlabel = 'Frame interval'
+            else:
+                xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            if show:
+                plt.show()
+
+        self.crmsd_df = msd_df
+        return msd_df
 
 
-
-
-
-
-
-    # test
-
-
-
-
-   
-   
     
 
 def main():
 
-    
-    def get_imlist(path, format = '.jpg'):
-
-        """
-        returns a list of filenames for all png images in a directory
-        """
-        if os.path:
-            return [os.path.join(path,f) for f in os.listdir(path) if f.endswith(format)]
-        else:
-            raise OSError("No such directory: " + path)
-        
-
-    img_folder = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\data\\16.06.23_stretch_data"
-
-    im_list = get_imlist(img_folder, format = '.tif')
-
-    cellpose_folder_path = \
-    'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\Lib\\site-packages\\cellpose'
+    model_directory = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose\\models\\cyto_0'
+    cellpose_python_filepath = 'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
     imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
+    cellpose_folder_path = "C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\lib\\site-packages\\cellpose"
 
-    cellpose_python_filepath = \
-    'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
+    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\im0.tif"
+    input_directory = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648"
+    image_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_698x648\\im0.tif"
+    im_p = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.tif"
+    show_output = True
+    cellpose_dict = {'USE_GPU': True, 'CELL_DIAMETER': 0.0}
+    
+    # xml_path, outfolder, use_model = cyto2,nuclei, 
+    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\20.09.xml'
+    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
+# output_directory = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources"
+    output_path = os.path.dirname(xml_path)
+    path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\NucleiCorrected.tif"
+    new_path = path.strip(".tif") + "_resized.tif"
 
-    image_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.tif"
+    path_stretch = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\16.06.23_stretch_data_split"
+    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split"
+    pn = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\t_164_428 - 2023_03_03_TL_MDCK_2000cells_mm2_10FNh_10min_int_frame1_200_cropped_split_orig\\im11.tif"
+    
+    xml_path = 'C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml'
+    xml_path = "C:\\Users\\Simon Andersen\\Documents\\Uni\\SummerProject\\valeriias mdck data for simon\\24.08.22_698x648\\merged.xml"
 
-    # Set whether to use a pretrained model or not. If not, you need to provide the path
-    #  to a custom model
-    use_model = 'EPI6000'
-    custom_model_path = None
+    dir_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker"
+    image_path = os.path.join(dir_path, 'resources', 'epi2500.tif')
 
-    # Set whether to open Fiji and show the segmentation and tracking results. 
-    # If you choose to show the results, you must close the window before the program
-    #  can continue
-    show_segmentation = False
-    output_folder = img_folder
-    # Set cellpose and trackmate settings. If you don't provide any, the default settings
-    #  will be used
-    cellpose_dict = {
-            'TARGET_CHANNEL' : 0,
-            'OPTIONAL_CHANNEL_2': 0,
-            'CELL_DIAMETER': 0.0, # If 0.0, the diameter will be estimated by Cellpose
-            'USE_GPU': True,
-            'SIMPLIFY_CONTOURS': True
-            }
-
-    # Beware that if you set ALLOW_TRACK_SPLITTING and/or ALLOW_TRACK_MERGING to True, 
-    # the calculated velocities might be incorrect, as several cells will be merged into
-    #  one track and can be present at the same time
-    trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
-                                            'GAP_CLOSING_MAX_DISTANCE': 15.0,
-                                            'MAX_FRAME_GAP': 2,
-                                            'ALLOW_TRACK_SPLITTING': False, 
-                                            'ALLOW_TRACK_MERGING': False,
-                }
-
-    # Now having set all parameters, we are ready to initialise the CellSegmentationTracker
-    #  object:
     unit_conversion_dict= {
-                                               #   'frame_interval_in_physical_units': 600,
-                                                  'physical_length_unit_name': r'$\mu$m',
-                                                    'physical_time_unit_name': 's',
+
+                                                'physical_length_unit_name': r'$\mu$m',
+                                                    'physical_time_unit_name': 'min',
         }
+
+    cst = CellSegmentationTracker(cellpose_folder_path, imj_path, cellpose_python_filepath, output_folder_path=output_path, \
+                                show_segmentation=show_output, cellpose_dict=cellpose_dict, use_model='EPI2500', unit_conversion_dict=unit_conversion_dict)
+    t1= time.time()
+  #  cst.run_segmentation_tracking()
+    t2= time.time()
+    print("RUNTIME: ", np.round(t2-t1))
+  #  cst.generate_csv_files()
+    cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+
+    
+    
     if 1:
-        #xml_path=im_list[1].strip('.tif') + '.xml'
-        cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
-            cellpose_python_filepath = cellpose_python_filepath, output_folder_path=output_folder, \
-                use_model = use_model, custom_model_path = custom_model_path,\
-                show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
-                trackmate_dict = trackmate_dict, unit_conversion_dict=unit_conversion_dict)
-        cst.spots_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_spots.csv')
-        cst.tracks_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_tracks.csv')
-        cst.edges_df = pd.read_csv('C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500_edges.csv')
+        msd_df = cst.calculate_msd(max_frame_interval = None, \
+                                    Ndof = 0, save_csv = True, name = None,  plot = True, show = True)
 
-        cst.calculate_grid_statistics(include_features=['Radius', 'Area'])
-        print(cst.grid_df['cell_number'].mean())
-        cst.visualize_grid_statistics(feature = 'cell_number', feature_unit = r'$\mu$m', \
-                                    calculate_average=False, animate=True)
-
-       # cst.generate_csv_files()
-    print(im_list[0])
-    if 0:
-        for im_path in [im_list[0]]:
-            cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
-            cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
-                use_model = use_model, custom_model_path = custom_model_path,\
-                show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
-                trackmate_dict = trackmate_dict,)
-        
-        cst.run_segmentation_tracking()
-        df_spots, df_tracks, df_edges = cst.generate_csv_files()
-
-        cst.plot_feature_over_time(spot_feature = 'Solidity', feature_unit = r'$\mu$m')
-        cst.calculate_grid_statistics(Ngrid = 12, include_features=['Radius', 'Area'])
-        cst.visualize_grid_statistics(feature = 'Radius', feature_unit = r'$\mu$m', \
-                                    calculate_average=False, animate=True)
+        if 0:
+            print(msd_df.head())
+            print(msd_df.tail())
+            print(msd_df.info())
+            print(msd_df.describe())
 
 
 

@@ -1245,7 +1245,8 @@ dimension and twice the average cell diameter: ", Ngrid)
         Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval.
         For each frame interval, the MSD is calculated as the average of the squared displacements of all particles 
         relative to their positions at the start of the frame interval for all possible starting points in time.
-
+        See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
+  
         Parameters:
         -----------
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
@@ -1279,19 +1280,25 @@ dimension and twice the average cell diameter: ", Ngrid)
         data = self.spots_df.loc[:, cols].values.astype('float')
         time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
 
+        # Initialize dataframe
         msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
-        msd_df = pd.DataFrame(np.zeros([max_frame_interval - 1, len(msd_cols)]), columns = msd_cols)
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
+        print("msd shape: ", msd_df.shape, "\n")
  
+        # Loop over all frame intervals
         for frame_interval in np.arange(1, max_frame_interval + 1):
             msd_list = []
 
             for track in np.arange(self.__Ntracks):
+                # Extract data for given track
                 arr = data[data[:, 0] == track]
 
+                # Calculate MSD for given track if track is longer than frame interval
                 if len(arr) > frame_interval:
                     msd_vec = (np.linalg.norm(arr[frame_interval:, 1:] - arr[:-frame_interval, 1:], axis = 1))**2
                     msd_list.append(np.mean(msd_vec))
-                    
+
+            # Calculate average MSD for given frame interval
             mean, std = np.mean(msd_list), np.std(msd_list, ddof = Ndof)
             msd_df.loc[frame_interval - 1, :] = [frame_interval, frame_interval * time_interval, mean, std / np.sqrt(len(msd_list))]
 
@@ -1314,6 +1321,149 @@ dimension and twice the average cell diameter: ", Ngrid)
                 plt.show()
 
         self.msd_df = msd_df
+        print("msd", msd_df)
+        return msd_df
+
+    def calculate_crmsd(self, N_neighbors = 5, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
+        """
+        Calculates the cage relative mean squared displacement (CRMSD) for each frame interval up to a given maximum frame interval.
+        See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
+  
+        Parameters:
+        -----------
+        N_neighbors : (int, default = 5) - number of nearest neighbors to consider when calculating the CRMSD.
+        max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
+                             If None, the maximum frame interval is set to the number of frames - 1.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        save_csv : (bool, default=True) - if True, the CRMSD dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+        plot : (bool, default = True) - if True, the CRMSD is plotted.
+        show : (bool, default = True) - if True, the plot is shown.
+
+        Returns:
+        --------
+        crmsd_df : pandas dataframe - dataframe containing the CRMSD for each frame interval up to the maximum frame interval.
+
+        """
+
+        # Initialize necessary variables
+        if self.__Nframes is None:
+            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+        if self.__Ntracks is None:
+            self.__Ntracks = int(self.spots_df['TRACK_ID'].max() + 1)
+
+        # Set maximum frame interval
+        max_frame_interval = self.__Nframes - 1 if max_frame_interval is None else min(max_frame_interval, self.__Nframes - 1)
+    
+        if max_frame_interval < 1:
+            print("\nFrame interval must be a positive integer\n")
+            return
+
+        # Extract relevant data from dataframe as array
+        cols = ['TRACK_ID', 'Frame', 'X', 'Y',]
+        data = self.spots_df.loc[:, cols].values.astype('float')
+        time_interval = self.spots_df['T'].unique()[1] - self.spots_df['T'].unique()[0]
+
+        # Initialize list of crmsd values. Each element of the list contains the list of crmsd values for a given frame interval
+        msd_list = [[] for _ in range(max_frame_interval)]
+
+        # Loop over all tracks
+        for track in np.arange(self.__Ntracks):
+            # Get data for current track
+            arr = data[data[:, 0] == track]
+            Nframes = len(arr)
+
+            # Move on if gaps are present, i.e. if the frame interval is not constant
+            if len(np.unique(np.diff(arr[:, 1]))) != 1:
+                continue
+
+            # Loop over all frames
+            for i, frame in enumerate(arr[:-1, 1].astype('int')):
+                # Get point arr for current frame and exclude current track
+                data_res = data[data[:, 1] >= frame]
+                self_mask = (data_res[:, 0] == track)
+                data_res = data_res[~self_mask]
+
+                # Find the N_neighbors nearest neighbors
+                frame_mask = (data_res[:, 1] == frame)
+                tree = KDTree(data_res[frame_mask, 2:])
+
+                # Get the starting position and the positions and indices of the neighbors
+                start_pos = arr[i, 2:].reshape(-1, 2)
+                neighbor_idx = tree.query(start_pos, k = N_neighbors, return_distance = False).reshape(-1)
+                neighbor_start_pos = data_res[frame_mask, 2:][neighbor_idx]
+                neighbor_ids = data_res[frame_mask, 0][neighbor_idx]
+
+                # Find the neighbor with the shortest Nframes, and collect neighbor tracks
+                Nframes_neighbors = np.zeros(N_neighbors)
+                neighbor_pos_list = []
+                for j, neighbor_id in enumerate(neighbor_ids):
+                    # Get positions of neighbor
+                    neighbor_pos_list.append(data_res[data_res[:, 0] == neighbor_id, 2:])
+
+                    # Get number of frames before any potential gap
+                    try:
+                        Nframes_before_gap = np.min(np.where(np.diff(data_res[data_res[:, 1] == neighbor_id != 1])))
+                        Nframes_neighbors[j] = int(min(len(neighbor_pos_list[j]), Nframes_before_gap))
+                    except:
+                        Nframes_neighbors[j] = len(neighbor_pos_list[j])
+    
+                # Get the maximum number of frames to consider
+                Nframes_max = int(min(Nframes, np.min(Nframes_neighbors), max_frame_interval + 1))
+                if Nframes_max == 0:
+                    continue
+
+                # Calculate displacements of neighbors relative to their starting positions
+                delta_neighbor_arr = np.zeros([N_neighbors, Nframes_max - 1, 2])
+                for j, neighbor_pos in enumerate(neighbor_pos_list):
+                    delta_neighbor_arr[j, :, :] = neighbor_pos[1:Nframes_max] - neighbor_start_pos[j]
+
+                # Calculate the mean displacement of the neighbors
+                mean_delta_neighbor_arr = np.mean(delta_neighbor_arr, axis = 0)
+
+                # Calculate the crmsd for each frame interval
+                crmsd = np.linalg.norm(arr[i + 1: i + Nframes_max, 2:] - start_pos - mean_delta_neighbor_arr, axis = 1)**2
+
+                # Add the crmsd values to the list
+                for j, val in enumerate(crmsd):
+                    msd_list[j].append(val)
+
+        # Calculate mean and standard error of the mean for each frame interval
+        mean = []
+        std_sem = []
+        for val in msd_list:
+            mean.append(np.mean(val) if len(val) > 0 else np.nan)
+            std_sem.append(np.std(val, ddof = Ndof) / np.sqrt(len(val)) if len(val) > Ndof else np.nan)
+
+        # Create and fill dataframe
+        msd_cols = ['frame_interval', 'time_interval', 'crmsd', 'crmsd_std']
+        msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
+        msd_df.loc[:, 'frame_interval'] = np.arange(1, max_frame_interval + 1)
+        msd_df.loc[:, 'time_interval'] = msd_df.loc[:, 'frame_interval'] * time_interval
+        msd_df.loc[:, 'crmsd'] = mean
+        msd_df.loc[:, 'crmsd_std'] = std_sem
+
+        if save_csv:
+            name = self.__generate_filename(name, append = '_crmsd.csv')
+            msd_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("CRMSD dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+        if plot:
+            fig, ax = plt.subplots()
+            ax.errorbar(msd_df['time_interval'], msd_df['crmsd'], msd_df['crmsd_std'], fmt = 'k.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                xlabel = 'Frame interval'
+            else:
+                xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
+
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            if show:
+                plt.show()
+
+        self.crmsd_df = msd_df
         return msd_df
 
 
+    
