@@ -280,6 +280,7 @@ generate_csv_files
 get_summary_statistics
 plot_feature_over_time
 calculate_msd
+calculate_crmsd
 calculate_grid_statistics
 visualize_grid_statistics
 plot_velocity_field
@@ -339,9 +340,35 @@ Parameters:
 ```python
 calculate_msd(max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True)
 ```
-Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval. For each frame interval, the MSD is calculated as the average of the squared displacements of all particles relative to their positions at the start of the frame interval for all possible starting points in time.
+Calculates the mean squared displacement (MSD) for each frame interval up to a given maximum frame interval. For each frame interval, the MSD is calculated as the average of the squared displacements of all particles relative to their positions at the start of the frame interval for all possible starting points in time. See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
 
 Parameters:
+- **max_frame_interval : (int, default = None)**
+    - maximum frame interval to calculate the MSD for. If None, the maximum frame interval is set to the number of frames - 1, which is the maximum.
+- **Ndof : (int, default = 1)**
+    - number of degrees of freedom used to calculate the standard deviation on the MSD.
+- **save_csv : (bool, default=True)**
+    - if True, the grid dataframe is saved as a csv file.
+- **name : (string, default = None)**
+    - name of the csv file. If None, the name of the image file is used. It will be saved in the output_folder, if provided, 
+                                     otherwise in the image folder
+- **plot : (bool, default=True)**
+    - if True, the MSD is plotted
+- **show : (bool, default=True)**
+    - if True, the figures are shown
+
+Returns --> grid_df:
+- **msd_df : (pandas DataFrame)** - dataframe containing the MSD for each frame interval up to the maximum frame interval.
+
+```python
+calculate_crmsd(N_neighbors = 5, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True)
+```
+Calculates the cage relative mean squared displacement (CRMSD) for each frame interval up to a given maximum frame interval.
+  See Dynamic Migration Modes of Collective Cells by Shao-Zhen Lin et. al. for more details.
+
+Parameters:
+- **N_neighbors : (int, default = 5)**
+    - number of nearest neighbors to consider when calculating the CRMSD.
 - **max_frame_interval : (int, default = None)**
     - maximum frame interval to calculate the MSD for. If None, the maximum frame interval is set to the number of frames - 1, which is the maximum.
 - **Ndof : (int, default = 1)**
