@@ -834,7 +834,7 @@ class CellSegmentationTracker:
         edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
         """
 
-        if not os.path.isfile(f'{self.xml_path}') or not self.xml_path.endswith(".xml"):
+        if not self.xml_path.endswith(".xml"):
             raise OSError("No or invalid xml file path provided!")
         else:
             print("\nStarting to generate csv files from xml file now. This may take a while... \
