@@ -1,3 +1,4 @@
 tifftools
 seaborn
 scikit-image
+scikit-learn

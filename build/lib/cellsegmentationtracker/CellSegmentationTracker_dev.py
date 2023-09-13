@@ -45,7 +45,7 @@ d_colors = {'axes.prop_cycle': cycler(color = ['teal', 'navy', 'coral', 'plum', 
          'black', 'red', 'cyan', 'yellow', 'khaki','lightblue'])}
 rcParams.update(d)
 rcParams.update(d_colors)
-np.set_printoptions(precision = 5, suppress=1e-10)
+np.set_printoptions(precision = 10, suppress=1e-14)
 
 
 
@@ -271,6 +271,7 @@ class CellSegmentationTracker:
         self.grid_df = None
         self.msd_df = None
         self.crmsd_df = None
+        self.density_fluctuations_df = None
 
         self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500', 'EPI6000']
 
@@ -1262,8 +1263,7 @@ dimension and twice the average cell diameter: ", Ngrid)
         # Initialize dataframe
         msd_cols = ['frame_interval', 'time_interval', 'msd', 'msd_std']
         msd_df = pd.DataFrame(np.zeros([max_frame_interval, len(msd_cols)]), columns = msd_cols)
-        print("msd shape: ", msd_df.shape, "\n")
- 
+
         # Loop over all frame intervals
         for frame_interval in np.arange(1, max_frame_interval + 1):
             msd_list = []
@@ -1300,300 +1300,8 @@ dimension and twice the average cell diameter: ", Ngrid)
                 plt.show()
 
         self.msd_df = msd_df
-        print("msd", msd_df)
         return msd_df
 
-    def get_density_fluctuations(self, Nwindows = 10, frame_range = [0,0], return_absolute_cell_counts = False,):
-        """
-        Calculate defect density fluctuations for different (circular) window sizes (radii). 
-        This is done by placing circular windows of a different sizes (= radii) at the center of the image, 
-        counting the number of particles within each window, and finally calculating the variance of the 
-        number of particles for each window size. The largest window size is determined by the size of the image,
-        and the smallest window size is determined by the number of windows.
-
-        Parameters:
-        -----------
-        Nwindows: (int, default = 10) - number of windows to calculate defect density for.
-        Ndof: (int, default = 1) - number of degrees of freedom used to calculate variance
-
-        Returns --> (defect_densities, window_sizes): 
-        -------- 
-        defect_densities: array of defect densities for different window sizes
-        window_sizes: array of window sizes
-
-        """
-    
-        if self.grid_df is None:
-            self.calculate_grid_statistics(Ngrid = 12, save_csv=False)
-            
-        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
-        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
-
-        # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
-        mask = (data[:, 0] >= frame_range[0]) & (data[:, 0] < frame_range[1])
-        data = data[mask]
-   
-        # Intialize array of defect densities
-        defect_densities = np.zeros([Nframes, Nwindows])
-
-        # Initalize array of average defect densities
-        av_defect_densities = np.zeros(Nframes)
-
-        # Define center point
-        LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
-        LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
-        center = np.array([LX/2, LY/2])
-
-        # Calculate the average radius of a spot
-        avg_radius = self.spots_df['Radius'].mean()
-        
-        # Define max. and min. window size
-        if self.__grid_dict['Ny'] <= self.__grid_dict['Nx']:
-            max_window_size = LY / 2 - 2 * avg_radius
-        elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
-            max_window_size = LX / 2 - 2 * avg_radius
-
-        min_window_size = (LX / 2 ) / Nwindows
-
-        # Define window sizes
-        window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
-
-        # Calculate average of average defect densities
-        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-        av_av_defect_densities = self.grid_df['number_density'].mean()
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-
-        idx = self.grid_df['number_density'].index[self.grid_df['number_density'] == 0]
-
-        av_defect_densities = np.zeros(Nframes)
-
-        for frame in np.arange(Nframes):
-            # Step 1: Get defect positions for the given frame
-            defect_positions = data[data[:, 0] == frame, -2:]
-
-            # Step 2: Calculate distance of each defect to center
-            distances = np.linalg.norm(defect_positions - center, axis=1)
-
-            # Step 3: Calculate density for each window size
-            for i, window_size in enumerate(window_sizes):
-                # Get defects within window
-                defects_in_window = len(distances[distances < window_size])
-
-                # Calculate and store density
-                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
-
-            wind = max_window_size + avg_radius
-            defects_in_window = len(distances[distances < wind])
-            av_defect_densities[frame] = defects_in_window / (np.pi * wind**2)
-            av_av_defect_densities = np.mean(av_defect_densities)
-
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-        for frame in np.arange(Nframes):
-            for i, w in enumerate(window_sizes):
-                print(av_defect_densities[frame] * (np.pi * w**2), defect_densities[frame,i] * (np.pi * w**2))
-
-        # Calculate fluctuations of defect density (Ndof = 0)
-        density_fluctuations = np.sqrt(np.mean((defect_densities - \
-                                        av_av_defect_densities)**2, axis = 0))
-        density_fluctuations_std = np.sqrt(np.std((defect_densities - \
-                                        av_av_defect_densities), axis = 0,))
-
-        if return_absolute_cell_counts:
-            return density_fluctuations * (np.pi * window_sizes**2), \
-                density_fluctuations_std * (np.pi * window_sizes**2), window_sizes, av_defect_densities, av_numbers
-        else:
-            return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
-
-    def calc_density_fluctuations_for_frame(self, points_arr, window_sizes, N_center_points = None, Ndof = 1, x_boundaries = None, y_boundaries = None, normalize = False):
-        """
-        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
-        lend me his code.
-
-        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes. 
-        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
-        and calculating the number of points within a circle of radius R for each of these points, from which
-        the number and density variance can be calculated.
-
-        Parameters:
-        -----------
-        points_arr : (numpy array) - Array of points in 2D plane
-        window_sizes : (numpy array or list) - Array of window sizes (i.e. radii) for which to calculate density fluctuations
-        N_center_points : (int) - Number of center points to use for each window size. If None, all points are used.
-        Ndof : (int) - Number of degrees of freedom to use for variance calculation
-        x_boundaries : (list) - List of x boundaries with the format [x_min, x_max]. If None, no boundaries are used.
-        y_boundaries : (list) - List of y boundaries with the format [y_min, y_max]. If None, no boundaries are used.
-        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
-
-        Returns:
-        --------
-        var_counts : (numpy array) - Array containing the number variance for each window size
-        var_densities : (numpy array) - Array containing the density variance for each window size
-    
-        """
-
-        # If N is not given, use all points
-        Npoints = len(points_arr)
-        N_center_points = len(points_arr) if N_center_points is None else N_center_points
-
-        # Initialize KDTree
-        tree = KDTree(points_arr)
-
-        # Initialize density array, density variance array and counts variance arrays
-        var_counts = np.empty_like(window_sizes, dtype=float)
-        var_densities = np.empty_like(var_counts)
-        av_counts = np.empty_like(var_counts)
-
-        for i, radius in enumerate(window_sizes):
-            ## Choose N random points
-            # If boundaries are given, only consider points whose distance to the boundary is larger than R
-            if x_boundaries is not None or y_boundaries is not None:
-                # Initialize index of allowed center points
-                indices = np.arange(Npoints)
-                if x_boundaries is not None:
-                    mask_x = (points_arr[:,0] - radius >= x_boundaries[0]) & (points_arr[:,0] + radius <= x_boundaries[1])
-                    indices = indices[mask_x]
-                if y_boundaries is not None:
-                    mask_y = (points_arr[indices, 1] - radius >= y_boundaries[0]) & (points_arr[indices, 1] + radius <= y_boundaries[1])
-                    indices = indices[mask_y]
-                # Choose N random points
-                indices = np.random.choice(indices, min(N_center_points, len(indices)), replace=False)
-            else:
-                # Choose N random points
-                indices = np.random.choice(range(Npoints), N_center_points, replace=False)
-
-            if len(indices) == 0:
-                var_counts[i] = np.nan
-                var_densities[i] = np.nan
-                av_counts[i] = np.nan
-                continue
-
-            # Initalize arrays of points to consider as center points
-            center_points = points_arr[indices]
-
-            # Calculate no. of points within circle for each point
-            counts = tree.query_radius(center_points, r=radius, count_only=True)
-
-            # Calculate average counts
-            av_counts[i] = np.mean(counts)
-
-            # Calculate number and density variance
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                var_counts[i] = np.var(counts, ddof = Ndof)
-                var_densities[i] = var_counts[i] / (np.pi * radius**2)**2
-
-        if normalize:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=RuntimeWarning)
-                av_densities = np.nanmean(av_counts / (np.pi * window_sizes**2))
-                var_densities /= av_densities**2
-
-        return var_counts, var_densities
-
-    def calc_density_fluctuations(self, window_sizes, frame_range = [0,0], N_center_points = None, Ndof = 1, normalize = False):
-        """
-        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
-        lend me his code.
-
-        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes for each frame in frame_range.  
-        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
-        and calculating the number of points within a circle of radius R for each of these points, from which
-        the number and density variance is calculated.
-
-        Parameters:
-        -----------
-
-        Returns --> (,): 
-        -------- 
-
-
-        """
-            
-        if self.grid_df is None:
-            self.calculate_grid_statistics(Ngrid = 12, save_csv=False)
-            
-        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
-        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
-
-        # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
-        mask = (data[:, 0] >= frame_range[0]) & (data[:, 0] < frame_range[1])
-        data = data[mask]
-
-        # Intialize array of defect densities
-        defect_densities = np.zeros([Nframes, Nwindows])
-
-
-         # Initalize array of average defect densities
-        av_defect_densities = np.zeros(Nframes)
-
-        # Define center point
-        LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
-        LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
-        center = np.array([LX/2, LY/2])
-
-        # Calculate the average radius of a spot
-        avg_radius = self.spots_df['Radius'].mean()
-        
-        # Define max. and min. window size
-        if self.__grid_dict['Ny'] <= self.__grid_dict['Nx']:
-            max_window_size = LY / 2 - 2 * avg_radius
-        elif self.__grid_dict['Ny'] > self.__grid_dict['Nx']:
-            max_window_size = LX / 2 - 2 * avg_radius
-
-        min_window_size = (LX / 2 ) / Nwindows
-
-        # Define window sizes
-        window_sizes = np.linspace(min_window_size, max_window_size, Nwindows)
-
-        # Calculate average of average defect densities
-        av_defect_densities = self.grid_df.groupby('Frame')['number_density'].mean()
-        av_av_defect_densities = self.grid_df['number_density'].mean()
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-
-        idx = self.grid_df['number_density'].index[self.grid_df['number_density'] == 0]
-
-        av_defect_densities = np.zeros(Nframes)
-
-        for frame in np.arange(Nframes):
-            # Step 1: Get defect positions for the given frame
-            defect_positions = data[data[:, 0] == frame, -2:]
-
-            # Step 2: Calculate distance of each defect to center
-            distances = np.linalg.norm(defect_positions - center, axis=1)
-
-            # Step 3: Calculate density for each window size
-            for i, window_size in enumerate(window_sizes):
-                # Get defects within window
-                defects_in_window = len(distances[distances < window_size])
-
-                # Calculate and store density
-                defect_densities[frame, i] = defects_in_window / (np.pi * window_size**2)
-
-            wind = max_window_size + avg_radius
-            defects_in_window = len(distances[distances < wind])
-            av_defect_densities[frame] = defects_in_window / (np.pi * wind**2)
-            av_av_defect_densities = np.mean(av_defect_densities)
-
-        av_numbers = (np.pi * window_sizes ** 2 ) * av_av_defect_densities
-        for frame in np.arange(Nframes):
-            for i, w in enumerate(window_sizes):
-                print(av_defect_densities[frame] * (np.pi * w**2), defect_densities[frame,i] * (np.pi * w**2))
-
-        # Calculate fluctuations of defect density (Ndof = 0)
-        density_fluctuations = np.sqrt(np.mean((defect_densities - \
-                                        av_av_defect_densities)**2, axis = 0))
-        density_fluctuations_std = np.sqrt(np.std((defect_densities - \
-                                        av_av_defect_densities), axis = 0,))
-
-        if return_absolute_cell_counts:
-            return density_fluctuations * (np.pi * window_sizes**2), \
-                density_fluctuations_std * (np.pi * window_sizes**2), window_sizes, av_defect_densities, av_numbers
-        else:
-            return density_fluctuations, density_fluctuations_std, window_sizes, av_defect_densities, av_numbers
-
-    
     def calculate_crmsd(self, N_neighbors = 5, max_frame_interval = None, Ndof = 1, save_csv = True, name = None,  plot = True, show = True):
         """
         Calculates the cage relative mean squared displacement (CRMSD) for each frame interval up to a given maximum frame interval.
@@ -1605,10 +1313,10 @@ dimension and twice the average cell diameter: ", Ngrid)
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
                              If None, the maximum frame interval is set to the number of frames - 1.
         Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
-        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
+        save_csv : (bool, default=True) - if True, the CRMSD dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                 It will be saved in the output_folder, if provided, otherwise in the image folder.
-        plot : (bool, default = True) - if True, the MSD is plotted.
+        plot : (bool, default = True) - if True, the CRMSD is plotted.
         show : (bool, default = True) - if True, the plot is shown.
 
         Returns:
@@ -1728,14 +1436,232 @@ dimension and twice the average cell diameter: ", Ngrid)
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Mean squared displacement')
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Cage relative MSD')
             if show:
                 plt.show()
 
         self.crmsd_df = msd_df
         return msd_df
 
+    def calc_density_fluctuations_for_frame(self, points_arr, window_sizes, N_center_points = None, Ndof = 1, \
+                                            x_boundaries = None, y_boundaries = None, normalize = False):
+        """
+        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
+        lend me his code.
 
+        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes. 
+        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
+        and calculating the number of points within a circle of radius R for each of these points, from which
+        the number and density variance can be calculated.
+
+        Parameters:
+        -----------
+        points_arr : (numpy array) - Array of points in 2D plane
+        window_sizes : (numpy array or list) - Array of window sizes (i.e. radii) for which to calculate density fluctuations
+        N_center_points : (int) - Number of center points to use for each window size. If None, all points are used.
+        Ndof : (int) - Number of degrees of freedom to use for variance calculation
+        x_boundaries : (list) - List of x boundaries with the format [x_min, x_max]. If None, no boundaries are used.
+        y_boundaries : (list) - List of y boundaries with the format [y_min, y_max]. If None, no boundaries are used.
+        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
+
+        Returns:
+        --------
+        var_counts : (numpy array) - Array containing the number variance for each window size
+        var_densities : (numpy array) - Array containing the density variance for each window size
+    
+        """
+
+        # If N is not given, use all points
+        Npoints = len(points_arr)
+        N_center_points = len(points_arr) if N_center_points is None else N_center_points
+
+        # Initialize KDTree
+        tree = KDTree(points_arr)
+
+        # Initialize density array, density variance array and counts variance arrays
+        var_counts = np.empty_like(window_sizes, dtype=float)
+        var_densities = np.empty_like(var_counts, dtype=float)
+        av_counts = np.empty_like(var_counts, dtype=float)
+
+        for i, radius in enumerate(window_sizes):
+            ## Choose N random points
+            # If boundaries are given, only consider points whose distance to the boundary is larger than R
+            if x_boundaries is not None or y_boundaries is not None:
+                # Initialize index of allowed center points
+                indices = np.arange(Npoints)
+                if x_boundaries is not None:
+                    mask_x = (points_arr[:,0] - radius >= x_boundaries[0]) & (points_arr[:,0] + radius <= x_boundaries[1])
+                    indices = indices[mask_x]
+                if y_boundaries is not None:
+                    mask_y = (points_arr[indices, 1] - radius >= y_boundaries[0]) & (points_arr[indices, 1] + radius <= y_boundaries[1])
+                    indices = indices[mask_y]
+                # Choose N random points
+                indices = np.random.choice(indices, min(N_center_points, len(indices)), replace=False)
+            else:
+                # Choose N random points
+                indices = np.random.choice(range(Npoints), N_center_points, replace=False)
+
+            if len(indices) == 0:
+                var_counts[i] = np.nan
+                var_densities[i] = np.nan
+                av_counts[i] = np.nan
+                continue
+
+            # Initalize arrays of points to consider as center points
+            center_points = points_arr[indices]
+
+            # Calculate no. of points within circle for each point
+            counts = tree.query_radius(center_points, r=radius, count_only=True)
+
+            # Calculate average counts
+            av_counts[i] = np.mean(counts)
+
+            # Calculate number and density variance
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                var_counts[i] = np.var(counts, ddof = Ndof)
+                var_densities[i] = var_counts[i] / (np.pi * radius**2)**2
+
+        if normalize:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                av_densities = np.nanmean(av_counts / (np.pi * window_sizes**2))
+                var_densities /= av_densities**2
+
+        return var_counts, var_densities
+
+    def calc_density_fluctuations(self, window_sizes = None, N_center_points = None, Nwindows = 10, min_max_window_size_fractions = [0.05,0.25], \
+                                  frame_range = [0,0], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True):
+        """
+        This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
+        lend me his code.
+
+        Calculates the density fluctuations for a set of points in a 2D plane for different window sizes for each frame in frame_range.  
+        For each window_size (i.e. radius), the density fluctuations are calculated by choosing N_center_points random points
+        and calculating the number of points within a circle of radius R for each of these points, from which
+        the number and density variance is calculated.
+
+        Parameters:
+        -----------
+        window_sizes : (numpy array or list, default = None) - Array of window sizes (i.e. radii) for which to calculate density fluctuations.
+                     If None, the window sizes are calculated from min_max_window_size_fractions and Nwindows.
+        N_center_points : (int, default = None) - Number of center points to use for each window size. If None, all points are used. 
+                          If window_sizes is provided, this parameter is ignored.
+        Nwindows : (int, default = 10) - Number of windows to calculate density fluctuations for. If window_sizes is provided, this parameter is ignored.
+        min_max_window_size_fractions : (list, default = [0.05,0.25]) - List of minimum and maximum window size fractions with the format [min, max].
+                                        These fractions are multiplied with the smallest dimension of the image to obtain the minimum and maximum window sizes.
+                                        If window_sizes is provided, this parameter is ignored.
+        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
+                      If [0,0], all frames are visualized.
+        Ndof : (int) - Number of degrees of freedom to use for variance calculation
+        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
+        save_csv : (bool, default=True) - if True, the density fluctuation dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+        plot : (bool, default = True) - if True, the number variance is plotted.
+        show : (bool, default = True) - if True, the plot is shown.
+
+        Returns: 
+        -------- 
+        density_fluctuations_df : pandas dataframe - dataframe containing the number and density fluctuations as well as their uncertainties for each window size.
+        """
+            
+        # Calculate grid statistics if not already done (we need the grid dictionary)
+        if self.grid_df is None:
+            self.calculate_grid_statistics(Ngrid = 12, save_csv=False)
+            
+        
+        # Set number of frames and frame range
+        Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
+        frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
+        # Set number of degrees of freedom (must be 0 if only 1 frame is considered)
+        Ndof = Ndof if Nframes > 1 else 0
+
+        # Extract relevant data from dataframe as array
+        data = self.spots_df.loc[:, ['Frame', 'T', 'X', 'Y']].values
+        mask = (data[:, 0] >= frame_range[0]) & (data[:, 0] < frame_range[1])
+        data = data[mask]
+
+        # Define window sizes, if not given
+        if window_sizes is not None:
+            Nwindows = len(window_sizes)
+        else:
+            # Find smallest dimension of image
+            LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
+            LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+            L = min(LX, LY)
+            # Calculate window sizes from min and max window size fractions and number of windows
+            window_sizes = np.linspace(min_max_window_size_fractions[0] * L, min_max_window_size_fractions[1] * L, Nwindows)
+            #window_sizes = np.logspace(np.log10(min_max_window_size_fractions[0] * L), np.log10(min_max_window_size_fractions[1] * L), Nwindows)
+
+        # Initialize arrays for density and number fluctuations
+        var_density_arr = np.zeros([Nframes, Nwindows])
+        var_counts_arr = np.zeros([Nframes, Nwindows])
+
+        # Loop over all frames
+        for i, frame in enumerate(np.arange(frame_range[0], frame_range[1])):
+
+            # Calculate density fluctuations
+            var_counts, var_densities = self.calc_density_fluctuations_for_frame(data[data[:, 0] == frame, -2:], window_sizes, N_center_points = N_center_points, Ndof = Ndof, normalize = normalize)
+            # Store density and number fluctuations
+            var_density_arr[i, :] = var_densities
+            var_counts_arr[i, :] = var_counts
+  
+        # Initialize density fluctuation dataframe
+        fluc_cols = [ 'window_size', 'number_variance', 'number_variance_std', 'density_variance', 'density_variance_std',]
+        fluc_df = pd.DataFrame(np.zeros([Nwindows, len(fluc_cols)]), columns = fluc_cols)
+
+       # Calculate mean and standard deviation of density and number fluctuations
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            fluc_df.loc[:, 'window_size'] = window_sizes
+            fluc_df.loc[:, 'number_variance'] = np.nanmean(var_counts_arr, axis = 0)
+            fluc_df.loc[:, 'number_variance_std'] = np.nanstd(var_counts_arr, axis = 0, ddof = Ndof) / np.sqrt(Nframes)
+            fluc_df.loc[:, 'density_variance'] = np.nanmean(var_density_arr, axis = 0)
+            fluc_df.loc[:, 'density_variance_std'] = np.nanstd(var_density_arr, axis = 0, ddof = Ndof) / np.sqrt(Nframes)
+   
+        if save_csv:
+            name = self.__generate_filename(name, append = '_dens_fluc.csv')
+            fluc_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("Density fluctuation dataframe saved as csv file at: ", os.path.join(self.output_folder, name), "\n")
+
+        if plot:
+            fig, ax = plt.subplots()
+            # add density variance on second y axis
+            ax2 = ax.twinx()
+
+            ax.errorbar(fluc_df['window_size'], fluc_df['number_variance'], fluc_df['number_variance_std'], fmt = 'k.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5, label = 'Number variance')
+            ax2.errorbar(fluc_df['window_size'], fluc_df['density_variance'], fluc_df['density_variance_std'], fmt = 'r.',\
+                            capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5, label = 'Density variance')
+            ax2.set_ylabel(rf"Density variance (1 / {self.unit_conversion_dict['physical_length_unit_name']}$^4$)")
+
+            # add cell radius as a vertical line
+            avg_radius = self.spots_df['Radius'].mean()
+            ax.axvline(x = avg_radius, color = 'k', linestyle = '--', lw = 1.5, label = 'Cell radius')
+        
+            xlabel = rf'Window size ({self.unit_conversion_dict["physical_length_unit_name"]})'
+            ylabel = rf"Number variance"
+            ax.set(xlabel = xlabel, ylabel = ylabel, title = 'Number and density fluctuations')
+            fig.legend(loc = 'upper right', bbox_to_anchor = (0.65, 0.85))
+            if show:
+                plt.show()
+
+        # Store density fluctuation dataframe as attribute and return
+        self.density_fluctuations_df = fluc_df
+        return fluc_df
+
+
+# handle plotting and what not ift kun et frame
+# add logscale arg
+# handle the normalize stuff ift returns, plots, units + forefaldende. måske bare smide dem i csv no matter?
+# test, also fro 1 frame
+# plotte på en nice måde? linjer for hyperuniformiet etc?
+# document, add to notebook, add to github
+
+# build package, upload push
+# run notebook push
+    
     
 
 def main():
@@ -1785,9 +1711,13 @@ def main():
   #  cst.generate_csv_files()
     cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
 
+    cst.calc_density_fluctuations(window_sizes = None, N_center_points = None, Nwindows = 50, min_max_window_size_fractions = [0.02,0.4], \
+                                    frame_range = [0,1], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True)
+    
+
     
     
-    if 1:
+    if 0:
         msd_df = cst.calculate_msd(max_frame_interval = None, \
                                     Ndof = 0, save_csv = True, name = None,  plot = True, show = True)
 
