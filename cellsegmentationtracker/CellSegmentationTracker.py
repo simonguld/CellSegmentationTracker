@@ -1231,7 +1231,7 @@ dimension and twice the average cell diameter: ", Ngrid)
         N_neighbors : (int, default = 5) - number of nearest neighbors to consider when calculating the CRMSD.
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
                              If None, the maximum frame interval is set to the number of frames - 1.
-        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the CRMSD.
         save_csv : (bool, default=True) - if True, the CRMSD dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                 It will be saved in the output_folder, if provided, otherwise in the image folder.
@@ -1307,7 +1307,7 @@ dimension and twice the average cell diameter: ", Ngrid)
                         Nframes_neighbors[j] = len(neighbor_pos_list[j])
     
                 # Get the maximum number of frames to consider
-                Nframes_max = int(min(Nframes, np.min(Nframes_neighbors), max_frame_interval + 1))
+                Nframes_max = int(min(Nframes - i, np.min(Nframes_neighbors), max_frame_interval + 1))
                 if Nframes_max == 0:
                     continue
 

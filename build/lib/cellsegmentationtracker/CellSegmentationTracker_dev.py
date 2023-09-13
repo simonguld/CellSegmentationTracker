@@ -1312,7 +1312,7 @@ dimension and twice the average cell diameter: ", Ngrid)
         N_neighbors : (int, default = 5) - number of nearest neighbors to consider when calculating the CRMSD.
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
                              If None, the maximum frame interval is set to the number of frames - 1.
-        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the CRMSD.
         save_csv : (bool, default=True) - if True, the CRMSD dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                 It will be saved in the output_folder, if provided, otherwise in the image folder.
@@ -1388,7 +1388,7 @@ dimension and twice the average cell diameter: ", Ngrid)
                         Nframes_neighbors[j] = len(neighbor_pos_list[j])
     
                 # Get the maximum number of frames to consider
-                Nframes_max = int(min(Nframes, np.min(Nframes_neighbors), max_frame_interval + 1))
+                Nframes_max = int(min(Nframes - i, np.min(Nframes_neighbors), max_frame_interval + 1))
                 if Nframes_max == 0:
                     continue
 
@@ -1531,7 +1531,7 @@ dimension and twice the average cell diameter: ", Ngrid)
         return var_counts, var_densities
 
     def calc_density_fluctuations(self, window_sizes = None, N_center_points = None, Nwindows = 10, min_max_window_size_fractions = [0.05,0.25], \
-                                  frame_range = [0,0], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True):
+                                  use_logscale = False, frame_range = [0,0], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True):
         """
         This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
         lend me his code.
@@ -1551,6 +1551,8 @@ dimension and twice the average cell diameter: ", Ngrid)
         min_max_window_size_fractions : (list, default = [0.05,0.25]) - List of minimum and maximum window size fractions with the format [min, max].
                                         These fractions are multiplied with the smallest dimension of the image to obtain the minimum and maximum window sizes.
                                         If window_sizes is provided, this parameter is ignored.
+        use_logscale : (bool, default = False) - If True, the window sizes are distributed logarithmically between the minimum and maximum window size.
+                       This parameter is ignored if window_sizes is provided.
         frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
                       If [0,0], all frames are visualized.
         Ndof : (int) - Number of degrees of freedom to use for variance calculation
@@ -1590,10 +1592,12 @@ dimension and twice the average cell diameter: ", Ngrid)
             LX = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
             LY = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
             L = min(LX, LY)
+            if use_logscale:
+                window_sizes = np.logspace(np.log10(min_max_window_size_fractions[0] * L), np.log10(min_max_window_size_fractions[1] * L), Nwindows)
             # Calculate window sizes from min and max window size fractions and number of windows
-            window_sizes = np.linspace(min_max_window_size_fractions[0] * L, min_max_window_size_fractions[1] * L, Nwindows)
-            #window_sizes = np.logspace(np.log10(min_max_window_size_fractions[0] * L), np.log10(min_max_window_size_fractions[1] * L), Nwindows)
-
+            else:
+                window_sizes = np.linspace(min_max_window_size_fractions[0] * L, min_max_window_size_fractions[1] * L, Nwindows)
+    
         # Initialize arrays for density and number fluctuations
         var_density_arr = np.zeros([Nframes, Nwindows])
         var_counts_arr = np.zeros([Nframes, Nwindows])
@@ -1651,9 +1655,6 @@ dimension and twice the average cell diameter: ", Ngrid)
         self.density_fluctuations_df = fluc_df
         return fluc_df
 
-
-# handle plotting and what not ift kun et frame
-# add logscale arg
 # handle the normalize stuff ift returns, plots, units + forefaldende. måske bare smide dem i csv no matter?
 # test, also fro 1 frame
 # plotte på en nice måde? linjer for hyperuniformiet etc?
@@ -1709,10 +1710,22 @@ def main():
     t2= time.time()
     print("RUNTIME: ", np.round(t2-t1))
   #  cst.generate_csv_files()
-    cst.spots_df = pd.read_csv('resources/epi2500_spots.csv')
+    bp = "C:\\Users\\Simon Andersen\\Downloads\\01_Bb50_1_xyCorrected_spots.csv"
 
-    cst.calc_density_fluctuations(window_sizes = None, N_center_points = None, Nwindows = 50, min_max_window_size_fractions = [0.02,0.4], \
-                                    frame_range = [0,1], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True)
+    df1 = pd.read_csv(bp)
+    df2 = df1.loc[df1['TRACK_ID'] < 100]
+
+    cst.spots_df = df1
+    print(cst.spots_df.head())
+
+    crmsd = cst.calculate_crmsd(N_neighbors = 15, max_frame_interval = None, \
+                                    Ndof = 0, save_csv = True, name = None,  plot = True, show = True)
+    
+    print(crmsd.head())
+
+    
+    #cst.calc_density_fluctuations(window_sizes = None, N_center_points = None, Nwindows = 50, min_max_window_size_fractions = [0.02,0.4], \
+     #                               frame_range = [0,1], Ndof = 1, normalize = False, save_csv = True, name = None,  plot = True, show = True)
     
 
     
