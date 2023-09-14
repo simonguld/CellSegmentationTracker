@@ -575,7 +575,7 @@ class CellSegmentationTracker:
         ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax,)
 
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at t = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
@@ -593,7 +593,7 @@ class CellSegmentationTracker:
         """
         unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
@@ -612,7 +612,7 @@ class CellSegmentationTracker:
         """
         unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"],1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
@@ -847,7 +847,8 @@ class CellSegmentationTracker:
             try:
                 self.xml_path = self.__img_path.strip(".tif") + ".xml"
             except:
-                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
+                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \
+                              or the image folder must contain a .xml file with the same name as the image file.")
 
         
         root = et.fromstring(open(self.xml_path).read())
@@ -1084,7 +1085,7 @@ dimension and twice the average cell diameter: ", Ngrid)
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     arr_T = np.nanmean(arr_T, axis = 0)
         
-                if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                     time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
                 else:
                     t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
@@ -1159,7 +1160,7 @@ dimension and twice the average cell diameter: ", Ngrid)
 
             unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
             else:
                 t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
@@ -1252,7 +1253,7 @@ dimension and twice the average cell diameter: ", Ngrid)
             fig, ax = plt.subplots()
             ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
                             capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 xlabel = 'Frame interval'
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
@@ -1393,12 +1394,12 @@ dimension and twice the average cell diameter: ", Ngrid)
             fig, ax = plt.subplots()
             ax.errorbar(msd_df['time_interval'], msd_df['crmsd'], msd_df['crmsd_std'], fmt = 'k.',\
                             capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 xlabel = 'Frame interval'
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Cage relative MSD')
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = f'Cage relative MSD for {N_neighbors} neighbors')
             if show:
                 plt.show()
 
