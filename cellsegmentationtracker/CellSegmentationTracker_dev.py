@@ -1684,6 +1684,150 @@ dimension and twice the average cell diameter: ", Ngrid)
         self.density_fluctuations_df = fluc_df
         return fluc_df
 
+    def calculate_grid_statistics(self, grid_boundaries = None, Ngrid = None, include_features = [], \
+                               save_csv = True, name = None):
+        """
+        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
+        As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
+        as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
+        as well
+
+        Parameters:
+        ----------
+        Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
+                The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
+                with the restriction that the grid squares are square. If None, Ngrid is set to be
+                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
+                4 cells per grid square.
+        include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
+                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
+                            mean_velocity_X and mean_velocity_Y.
+                            The possible feature keys are the columns of the spots dataframe generated 
+                            by the function 'generate_csv_files'.
+        save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+               It will be saved in the output_folder, if provided, otherwise in the image folder.
+
+        Returns:
+        -------
+        grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
+        """
+
+        cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
+        add_to_grid = []
+        for feature in include_features:
+            if feature not in cols:
+                cols.append(feature)    
+                add_to_grid.append("mean_" + feature.lower())
+
+        # Extract relevant data from dataframe as array
+        data = self.spots_df.loc[:, cols].values.astype('float')
+
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns.extend(add_to_grid)
+
+        if grid_boundaries is None:
+            Lx = self.__grid_dict['Lx']
+            xmin = self.__grid_dict['xmin']
+            xmax = self.__grid_dict['xmax']
+            Ly = self.__grid_dict['Ly']
+            ymin = self.__grid_dict['ymin']
+            ymax = self.__grid_dict['ymax']
+        else:
+            Lx = grid_boundaries[0][1] - grid_boundaries[0][0]
+            xmin = grid_boundaries[0][0]
+            xmax = grid_boundaries[0][1]
+            Ly = grid_boundaries[1][1] - grid_boundaries[1][0]
+            ymin = grid_boundaries[1][0]
+            ymax = grid_boundaries[1][1]
+  
+
+        av_diameter = 2 * self.spots_df['Radius'].mean()
+        # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
+        if Ngrid is None: 
+            Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
+            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial \
+                  dimension and twice the average cell diameter: ", Ngrid)
+
+        # Initialize grid dictionary
+        self.__initialize_grid(Ngrid)
+
+        if grid_boundaries is None:
+            grid_len = self.__grid_dict['grid_len']
+            Nsquares = self.__grid_dict['Nsquares']
+            Nx = self.__grid_dict['Nx']
+            Ny = self.__grid_dict['Ny']
+        else:
+            if Lx > Ly:
+                grid_len = Ly / Ngrid
+                residual_x = Lx % grid_len
+                xmin = xmin + residual_x / 2
+                xmax = xmax - residual_x / 2
+                Ny = Ngrid
+                Nx = int(np.floor(Ngrid * Lx / Ly))
+                Nsquares = Nx * Ny
+            elif Lx <= Ly:
+                grid_len = Lx / Ngrid
+                residual_y = Ly % grid_len
+                ymin = ymin + residual_y / 2
+                ymax = ymax - residual_y / 2
+                Nx = Ngrid
+                Ny = int(np.floor(Ngrid * Ly / Lx))
+                Nsquares = Nx * Ny
+
+
+        # Print information about the length scales
+        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
+        print("Dimensions of region to be gritted: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
+        
+
+        # Initialize grid array
+        grid_arr = np.ones([self.__Nframes * Nsquares, len(grid_columns)])
+
+        # Loop over all frames
+        for i, frame in enumerate(np.arange(self.__Nframes)):
+            arr_T = data[data[:, 0] == frame]
+            time = arr_T[0, 3]
+            Ngrid_count = 0
+            for y in np.linspace(ymax - grid_len, ymin, Ny):
+                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + grid_len)
+                arr_Y = arr_T[mask]
+                for x in np.linspace(xmin, xmax - grid_len, Nx):
+                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
+            
+                    if mask.sum() == 0:
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:7] = \
+                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, 0]
+                        grid_arr[frame * Nsquares + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
+                    else:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", category=RuntimeWarning)
+                            vx = np.nanmean(arr_Y[mask, 4])
+                            vy = np.nanmean(arr_Y[mask, 5])
+
+                        # If true, return the number of cells in each grid as opposed to the density
+                        cell_number = mask.sum() 
+                        density = cell_number / (grid_len**2)     
+
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + grid_len / 2, \
+                                                                y + grid_len / 2, cell_number, density, vx, vy]
+                        # Add additional features to grid (if any)
+                        for j, feature in enumerate(add_to_grid):
+                            grid_arr[frame * Nsquares + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
+
+                    Ngrid_count += 1
+
+        self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
+        
+        # Print average number of cells per grid
+        print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+
+        if save_csv:
+            name = self.__generate_filename(name, append = '_grid_statistics.csv')
+            self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
+            print("\nGrid dataframe saved as csv file at: ", os.path.join(self.output_folder, name),)
+
+        return self.grid_df
 
 
 ##  NOGET MED: 
