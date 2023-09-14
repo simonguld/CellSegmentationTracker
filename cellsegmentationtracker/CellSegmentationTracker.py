@@ -159,7 +159,7 @@ class CellSegmentationTracker:
         self.__cellpose_folder_path = cellpose_folder_path
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
-        self.__img_path = None    
+        
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
@@ -167,6 +167,7 @@ class CellSegmentationTracker:
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
+        self.__img_path = self.img_folder if str(self.img_folder).endswith(".tif") else None
 
         if self.__cellpose_python_filepath is not None:
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
@@ -183,6 +184,8 @@ class CellSegmentationTracker:
         if output_folder_path is None:
             if self.img_folder is not None:
                 self.output_folder = self.img_folder if os.path.isdir(self.img_folder) else os.path.dirname(self.img_folder)
+            elif self.xml_path is not None:
+                self.output_folder = os.path.dirname(self.xml_path)
             else:
                 self.output_folder = self.__working_dir
         else:
@@ -239,9 +242,22 @@ class CellSegmentationTracker:
         self.__Ntracks = None
         self.__Nframes = None
         self.__convert_time_to_physical_units = False
-
+        if self.xml_path is not None:
+            self.__unit_conversion()
 
     #### Private methods ####
+
+    def __ensure_conversion_dict_validity(self):
+        """
+        Ensure that the unit conversion dictionary is valid.
+        """
+        if self.xml_path is not None:
+            self.__unit_conversion()
+
+        for key in self.unit_conversion_default_values.keys():
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+        return
     
     def __generate_title(self, feature, feature_unit = None):
         """
@@ -267,8 +283,12 @@ class CellSegmentationTracker:
             try:
                 name = os.path.basename(self.__img_path).strip(".tif")
             except:
-                name = 'CellSegmentationTracker'
+                try:
+                    name = os.path.basename(self.xml_path).strip(".xml")
+                except:
+                    name = 'CellSegmentationTracker'
             name = name + append if append is not None else name
+
         else:
             if not name.endswith('.csv'):
                 name = name + '.csv'
@@ -455,17 +475,18 @@ class CellSegmentationTracker:
 
         for key in dict_keys:
             if key not in self.unit_conversion_dict.keys():
-                self.unit_conversion_dict[key] = im_conversion_list[-1]
+                self.unit_conversion_dict[key] = float(im_conversion_list[-1])
                 print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
             else: 
                 if self.unit_conversion_dict[key] != im_conversion_list[-1]:
                     if im_conversion_list[-1] == 1:
                         self.__convert_time_to_physical_units = True
+                        self.unit_conversion_dict[key] = float(self.unit_conversion_dict[key])
                         print("\nUsing time unit conversion: Time between frames = ", \
                               self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
                     else:
                         print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
-                        self.unit_conversion_dict[key] = im_conversion_list[-1]         
+                        self.unit_conversion_dict[key] = float(im_conversion_list[-1])
         return
 
     def __save_csv(self, name = None):
@@ -493,11 +514,10 @@ class CellSegmentationTracker:
             print("Saved edges csv file to: ", path_out_edges)
         return
 
-    def __initialize_grid(self, Ngrid):
+    def __initialize_basic_attributes(self):
         """
-        Initialize grid dictionary.
+        Initialize basic attributes like Nframes, Nspots etc.
         """
-  
         # Extract relevant data from dataframe as array
         cols = ['Frame', 'X', 'Y', 'TRACK_ID']
         data = self.spots_df.loc[:, cols].values.astype('float')
@@ -514,6 +534,15 @@ class CellSegmentationTracker:
 
         self.__grid_dict['Lx'] = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
         self.__grid_dict['Ly'] = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+        return
+
+    def __initialize_grid(self, Ngrid):
+        """
+        Initialize grid dictionary.
+        """
+  
+        # Set basic attributes like Nframes, Ntracks etc
+        self.__initialize_basic_attributes()
    
         # Calculate number of grid squares in x and y direction
         if self.__grid_dict['Lx'] > self.__grid_dict['Ly']:
@@ -740,6 +769,7 @@ class CellSegmentationTracker:
         """
         Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
 
+
         Parameters:
         -----------
         calculate_velocities : (bool, default = True) - whether to calculate velocities from trackmate data and
@@ -755,34 +785,37 @@ class CellSegmentationTracker:
         edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
         """
 
-        if not self.xml_path.endswith(".xml"):
-            raise OSError("No or invalid xml file path provided!")
-        else:
-            print("\nStarting to generate csv files from xml file now. This may take a while... \
-                  \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
-            t1 = time.time()
-            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
-                                                            get_track_features = get_tracks, get_edge_features = get_edges)
-            t2 = time.time()
-            print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
+        if not str(self.xml_path).endswith(".xml"):
+            try:
+                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            except:
+                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
 
-            # Convert length and time to physical units, if necessary
-            self.__unit_conversion()
-            if self.__convert_time_to_physical_units:
-                # Features to convert
-                time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
-                inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
-                                        'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
-                                        'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+        print("\nStarting to generate csv files from xml file now. This may take a while... \
+                \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
+        t1 = time.time()
+        self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
+                                                        get_track_features = get_tracks, get_edge_features = get_edges)
+        t2 = time.time()
+        print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
 
-                for df in [self.spots_df, self.tracks_df, self.edges_df]:
-                    for key in time_keys:
-                        if key in df.columns:
-                            df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
-                    for key in inverse_time_keys:
-                        if key in df.columns:
-                            df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
-                print("Time unit conversion done.\n")
+        # Convert length and time to physical units, if necessary
+        self.__unit_conversion()
+        if self.__convert_time_to_physical_units:
+            # Features to convert
+            time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
+            inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
+                                    'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
+                                    'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+
+            for df in [self.spots_df, self.tracks_df, self.edges_df]:
+                for key in time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
+                for key in inverse_time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
+            print("Time unit conversion done.\n")
         
         self.__Nspots = len(self.spots_df)
         self.__Ntracks = len(self.tracks_df)
@@ -810,7 +843,13 @@ class CellSegmentationTracker:
         Print the settings used for cellpose segmentation and trackmate tracking, as well as some
         basic image information.
         """
+        if not str(self.xml_path).endswith(".xml"):
+            try:
+                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            except:
+                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
 
+        
         root = et.fromstring(open(self.xml_path).read())
 
         im_settings = root.find('Settings').find('ImageData')
@@ -841,11 +880,8 @@ class CellSegmentationTracker:
         print("\nSUMMARY STATISTICS FOR SPOTS: ")
         print("All lengths are in phyiscal units, if provided. Otherwise, they are in pixels.")
         print("All times are in physical units, if provided. Otherwise, they are in frames.\n")
-        if self.__Nspots is None:
-            self.__Nspots = len(self.spots_df)
-        print("Total no. of spots: ", self.__Nspots)
-        if self.__Nframes is None:
-            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+
+        self.__initialize_basic_attributes()
         print("Average no. of spots per frame: ", self.__Nspots / self.__Nframes)
      
         # Calculate average values of spot observables
@@ -1020,6 +1056,9 @@ dimension and twice the average cell diameter: ", Ngrid)
 
         """
   
+        # Ensure validity of unit_conversion_dict
+        self.__ensure_conversion_dict_validity()
+
         if feature not in self.grid_df.columns and feature not in self.spots_df.columns:
             print("\n Feature not in grid dataframe! Please specify a feature that is in the grid dataframe generated by the method calculate_grid_statistics.\n \
             These features are: \n", self.grid_df.columns, "\n")
@@ -1036,7 +1075,8 @@ dimension and twice the average cell diameter: ", Ngrid)
                 data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
                 data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
             else: 
-                raise OSError("No grid dataframe provided! You must first run the function 'calculate_grid_statistics'.")
+                print("No grid dataframe provided! To use visualize_grid_statistics, you must first run the function 'calculate_grid_statistics'.")
+                return
 
             if calculate_average:
                 arr_T = data[:,-1].reshape(Nframes, self.__grid_dict['Nsquares'])
@@ -1082,8 +1122,11 @@ dimension and twice the average cell diameter: ", Ngrid)
         animate : (bool, default=True) - if True, the velocity field is animated over the given frame range.
         frame_interval : (int, default=1200) - time between frames in ms (for the animation).
         show : (bool, default=True) - if True, the velocity field is shown.
-    
         """
+
+        # Ensure validity of unit_conversion_dict
+        self.__ensure_conversion_dict_validity()
+
         if self.__Nframes == 1:
             print("\nOnly one frame in the image! Velocity is undefined.\n")
             return
