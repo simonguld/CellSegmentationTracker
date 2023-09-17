@@ -1726,22 +1726,18 @@ dimension and twice the average cell diameter: ", Ngrid)
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
+        # Initialize necessary variables
         if grid_boundaries is None:
-            Lx = self.__grid_dict['Lx']
-            xmin = self.__grid_dict['xmin']
-            xmax = self.__grid_dict['xmax']
-            Ly = self.__grid_dict['Ly']
-            ymin = self.__grid_dict['ymin']
-            ymax = self.__grid_dict['ymax']
+            self.__initialize_basic_attributes()
+            Lx, Ly = self.__grid_dict['Lx'], self.__grid_dict['Ly']
+            xmin, xmax = self.__grid_dict['xmin'], self.__grid_dict['xmax']
+            ymin, ymax = self.__grid_dict['ymin'], self.__grid_dict['ymax']
         else:
             Lx = grid_boundaries[0][1] - grid_boundaries[0][0]
-            xmin = grid_boundaries[0][0]
-            xmax = grid_boundaries[0][1]
             Ly = grid_boundaries[1][1] - grid_boundaries[1][0]
-            ymin = grid_boundaries[1][0]
-            ymax = grid_boundaries[1][1]
+            xmin, xmax = grid_boundaries[0][0], grid_boundaries[0][1]
+            ymin, ymax = grid_boundaries[1][0], grid_boundaries[1][1]
   
-
         av_diameter = 2 * self.spots_df['Radius'].mean()
         # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
         if Ngrid is None: 
@@ -1752,35 +1748,29 @@ dimension and twice the average cell diameter: ", Ngrid)
         # Initialize grid dictionary
         self.__initialize_grid(Ngrid)
 
+        # Set remaining grid variables
         if grid_boundaries is None:
             grid_len = self.__grid_dict['grid_len']
             Nsquares = self.__grid_dict['Nsquares']
-            Nx = self.__grid_dict['Nx']
-            Ny = self.__grid_dict['Ny']
+            Nx, Ny = self.__grid_dict['Nx'], self.__grid_dict['Ny']
         else:
             if Lx > Ly:
                 grid_len = Ly / Ngrid
                 residual_x = Lx % grid_len
-                xmin = xmin + residual_x / 2
-                xmax = xmax - residual_x / 2
-                Ny = Ngrid
-                Nx = int(np.floor(Ngrid * Lx / Ly))
+                xmin, xmax = xmin + residual_x / 2, xmax - residual_x / 2
+                Nx, Ny = int(np.floor(Ngrid * Lx / Ly)), Ngrid
                 Nsquares = Nx * Ny
             elif Lx <= Ly:
                 grid_len = Lx / Ngrid
                 residual_y = Ly % grid_len
-                ymin = ymin + residual_y / 2
-                ymax = ymax - residual_y / 2
-                Nx = Ngrid
-                Ny = int(np.floor(Ngrid * Ly / Lx))
+                ymin, ymax = ymin + residual_y / 2, ymax - residual_y / 2
+                Nx, Ny = Ngrid, int(np.floor(Ngrid * Ly / Lx))
                 Nsquares = Nx * Ny
-
 
         # Print information about the length scales
         print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
         print("Dimensions of region to be gritted: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
         
-
         # Initialize grid array
         grid_arr = np.ones([self.__Nframes * Nsquares, len(grid_columns)])
 
