@@ -26,6 +26,7 @@ import seaborn as sns
 import pandas as pd
 import xml.etree.ElementTree as et
 from sklearn.neighbors import KDTree
+from scipy.interpolate import griddata
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
@@ -290,6 +291,7 @@ class CellSegmentationTracker:
                                          'MAX_FRAME_GAP': 2,
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
+                                         'ALLOW_GAP_CLOSING': True
              }
         self.unit_conversion_default_values = {   'frame_interval_in_physical_units': 1.0,
                                                   'physical_length_unit_name': 'pixels',
@@ -633,10 +635,17 @@ class CellSegmentationTracker:
         """
         Plots a heatmap of the given feature for a given frame.
         """  
-        arr_grid = frame.reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        
+        x_centers = self.grid_df['x_center'].unique()
+        y_centers = self.grid_df['y_center'].unique()
+        Nx, Ny = len(self.grid_df['x_center'].unique()), len(self.grid_df['y_center'].unique())
+        Nsquares = Nx * Ny
+        grid_len = x_centers[1] - x_centers[0]
 
-        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
-        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
+        arr_grid = frame.reshape(Ny, Nx)
+
+        xticklabels = np.round(np.linspace(min(x_centers), max(x_centers), 4) + grid_len / 2).astype('int')
+        yticklabels = np.round(np.linspace(max(y_centers), min(y_centers), 4) + grid_len / 2).astype('int')
 
         ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax,)
 
@@ -649,8 +658,8 @@ class CellSegmentationTracker:
         ax.set(xlabel = rf"x ({self.unit_conversion_dict['physical_length_unit_name']})",\
                ylabel = rf"y ({self.unit_conversion_dict['physical_length_unit_name']})",  title = title)
         
-        ax.set_xticks(ticks = np.linspace(0.5,self.__grid_dict['Nx'] - 0.5, 4), labels=xticklabels)
-        ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
+        ax.set_xticks(ticks = np.linspace(0.5,Nx - 0.5, 4), labels=xticklabels)
+        ax.set_yticks(ticks = np.linspace(0.5, Ny - 0.5, 4), labels=yticklabels)
         return
 
     def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, title = None):
@@ -669,7 +678,6 @@ class CellSegmentationTracker:
         plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
-  
         return
 
     def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, title = None):
@@ -690,7 +698,7 @@ class CellSegmentationTracker:
         plt.title(title)
         return
 
-    def __animate_flow_field(self, i, X, Y, arr, fig, fn,):
+    def __animate_flow_field(self, i, X, Y, arr, Nx, Ny, vx_idx, vy_idx, fig, fn,):
         """
         Animate the flow field for a given frame. Used as a wrapper for the animator function.
         """
@@ -699,8 +707,8 @@ class CellSegmentationTracker:
         fig.clf()
         # add subplot, aka axis
         # load the frame
-        arr_vx = arr[arr[:, 0] == i][:, -2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-        arr_vy = arr[arr[:, 0] == i][:, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        arr_vx = arr[arr[:, 0] == i][:, vx_idx].reshape(Ny, Nx)
+        arr_vy = arr[arr[:, 0] == i][:, vy_idx].reshape(Ny, Nx)
         # call the global function
         fn(X, Y, arr_vx, arr_vy, i=i)
         return
@@ -987,7 +995,7 @@ class CellSegmentationTracker:
         fig, ax = plt.subplots()
         ax.errorbar(self.spots_df.groupby('Frame')['T'].mean(),\
                     self.spots_df.groupby('T')[spot_feature].mean(), \
-                    self.spots_df.groupby('T')[spot_feature].std(ddof=1), fmt = 'k.',\
+                    self.spots_df.groupby('T')[spot_feature].std(ddof=1) / self.spots_df.groupby('T')['Frame'].count().values, fmt = 'k.',\
                           capsize = 5, capthick = 2, elinewidth = 2, ms = 5)
         ylabel = f'{spot_feature} ({feature_unit})' if feature_unit is not None else spot_feature
         ax.set(xlabel = f"Time ({self.unit_conversion_dict['physical_time_unit_name']})", ylabel = ylabel, title = 'Average ' + spot_feature + ' over time')
@@ -995,8 +1003,8 @@ class CellSegmentationTracker:
 
         return
 
-    def calculate_grid_statistics(self, Ngrid = None, include_features = [], \
-                               save_csv = True, name = None):
+    def calculate_grid_statistics(self, grid_boundaries = None, Ngrid = None, include_features = [], \
+                               interpolation_method = 'cubic', save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
         As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
@@ -1005,6 +1013,8 @@ class CellSegmentationTracker:
 
         Parameters:
         ----------
+        grid_boundaries : (list of tuples, default = None) - list of tuples with the format [(x_min, x_max), (y_min, y_max)]. 
+                          Only cells within these boundaries are considered. If None, the boundaries are set to be the boundaries of the image.
         Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
                 The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
                 with the restriction that the grid squares are square. If None, Ngrid is set to be
@@ -1015,6 +1025,8 @@ class CellSegmentationTracker:
                             mean_velocity_X and mean_velocity_Y.
                             The possible feature keys are the columns of the spots dataframe generated 
                             by the function 'generate_csv_files'.
+        interpolation_method : (string, default = 'cubic') - interpolation method to use to estimate nan velocities. 
+                               Possible values are 'linear', 'nearest' and 'cubic'.
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                It will be saved in the output_folder, if provided, otherwise in the image folder.
@@ -1037,41 +1049,69 @@ class CellSegmentationTracker:
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
+        # Initialize necessary variables
+        if grid_boundaries is None:
+            self.__initialize_basic_attributes()
+            Lx, Ly = self.__grid_dict['Lx'], self.__grid_dict['Ly']
+            xmin, xmax = self.__grid_dict['xmin'], self.__grid_dict['xmax']
+            ymin, ymax = self.__grid_dict['ymin'], self.__grid_dict['ymax']
+        else:
+            Lx = grid_boundaries[0][1] - grid_boundaries[0][0]
+            Ly = grid_boundaries[1][1] - grid_boundaries[1][0]
+            xmin, xmax = grid_boundaries[0][0], grid_boundaries[0][1]
+            ymin, ymax = grid_boundaries[1][0], grid_boundaries[1][1]
+  
         av_diameter = 2 * self.spots_df['Radius'].mean()
-        Lx = self.spots_df['X'].max() - self.spots_df['X'].min()
-        Ly = self.spots_df['Y'].max() - self.spots_df['Y'].min()
-
-        # Print information about the length scales
-        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
-        print("Image size: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
-        
         # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
-        if Ngrid is None:
+        if Ngrid is None: 
             Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
-            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial\n\
-dimension and twice the average cell diameter: ", Ngrid)
-            
+            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial \
+                  dimension and twice the average cell diameter: ", Ngrid)
+
         # Initialize grid dictionary
         self.__initialize_grid(Ngrid)
 
+        # Set remaining grid variables
+        if grid_boundaries is None:
+            grid_len = self.__grid_dict['grid_len']
+            Nsquares = self.__grid_dict['Nsquares']
+            Nx, Ny = self.__grid_dict['Nx'], self.__grid_dict['Ny']
+        else:
+            if Lx > Ly:
+                grid_len = Ly / Ngrid
+                residual_x = Lx % grid_len
+                xmin, xmax = xmin + residual_x / 2, xmax - residual_x / 2
+                Nx, Ny = int(np.floor(Ngrid * Lx / Ly)), Ngrid
+                Nsquares = Nx * Ny
+            elif Lx <= Ly:
+                grid_len = Lx / Ngrid
+                residual_y = Ly % grid_len
+                ymin, ymax = ymin + residual_y / 2, ymax - residual_y / 2
+                Nx, Ny = Ngrid, int(np.floor(Ngrid * Ly / Lx))
+                Nsquares = Nx * Ny
+
+        # Print information about the length scales
+        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
+        print("Dimensions of region to be gritted: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
+        
         # Initialize grid array
-        grid_arr = np.ones([self.__Nframes * self.__grid_dict['Nsquares'], len(grid_columns)])
+        grid_arr = np.ones([self.__Nframes * Nsquares, len(grid_columns)])
 
         # Loop over all frames
         for i, frame in enumerate(np.arange(self.__Nframes)):
             arr_T = data[data[:, 0] == frame]
             time = arr_T[0, 3]
             Ngrid_count = 0
-            for y in np.linspace(self.__grid_dict['ymax'] - self.__grid_dict['grid_len'], self.__grid_dict['ymin'], self.__grid_dict['Ny']):
-                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + self.__grid_dict['grid_len'])
+            for y in np.linspace(ymax - grid_len, ymin, Ny):
+                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + grid_len)
                 arr_Y = arr_T[mask]
-                for x in np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'] - self.__grid_dict['grid_len'], self.__grid_dict['Nx']):
-                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + self.__grid_dict['grid_len'])
+                for x in np.linspace(xmin, xmax - grid_len, Nx):
+                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
             
                     if mask.sum() == 0:
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:7] = \
-                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0, 0]
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:7] = \
+                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, 0]
+                        grid_arr[frame * Nsquares + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -1080,17 +1120,22 @@ dimension and twice the average cell diameter: ", Ngrid)
 
                         # If true, return the number of cells in each grid as opposed to the density
                         cell_number = mask.sum() 
-                        density = cell_number / (self.__grid_dict['grid_len']**2)     
+                        density = cell_number / (grid_len**2)     
 
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
-                                                                y + self.__grid_dict['grid_len'] / 2, cell_number, density, vx, vy]
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + grid_len / 2, \
+                                                                y + grid_len / 2, cell_number, density, vx, vy]
                         # Add additional features to grid (if any)
                         for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                            grid_arr[frame * Nsquares + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                     Ngrid_count += 1
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
+
+        # Interpolate velocities if there are nan values(interpolated velocities will be saved as new columns)
+        if np.isnan(self.grid_df['mean_velocity_X']).any():
+            print("\nInterpolating velocities...")
+            self.__interpolate_grid_velocities(interpolation_method = interpolation_method)
         
         # Print average number of cells per grid
         print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
@@ -1140,13 +1185,18 @@ dimension and twice the average cell diameter: ", Ngrid)
 
             if self.grid_df is not None:
                 data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
-                data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
+
+                Nx = len(self.grid_df['x_center'].unique())
+                Ny = len(self.grid_df['y_center'].unique())
+                Nsquares = Nx * Ny
+
+                data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares,:]
             else: 
                 print("No grid dataframe provided! To use visualize_grid_statistics, you must first run the function 'calculate_grid_statistics'.")
                 return
 
             if calculate_average:
-                arr_T = data[:,-1].reshape(Nframes, self.__grid_dict['Nsquares'])
+                arr_T = data[:,-1].reshape(Nframes, Nsquares)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     arr_T = np.nanmean(arr_T, axis = 0)
@@ -1175,13 +1225,13 @@ dimension and twice the average cell diameter: ", Ngrid)
         return
 
     def plot_velocity_field(self, mode = 'field', frame_range = [0,0], calculate_average = False, \
-                                animate = True, frame_interval = 1200, show = True):
+                                animate = True, frame_interval = 1200, use_interpolated_velocities = True, show = True):
         """
         Plot or animate the velocity field for a given frame range.
 
         Parameters:
         -----------
-        mode : (string, default = 'field_lines') - mode of visualization. Can be 'field' or 'streamlines'
+        mode : (string, default = 'field') - mode of visualization. Can be 'field' or 'streamlines'
         frame_range : (list of ints, default=[0,0] - range of frames to visualize. Left endpoint is included, \
                       right endpoint is not. If [0,0], all frames are visualized.
         calculate_average : (bool, default=False) - if True, the average velocity field over the given
@@ -1205,24 +1255,38 @@ dimension and twice the average cell diameter: ", Ngrid)
         else:
             plotter = self.__velocity_field_plotter
 
-    
         Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
         frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
-        data= self.grid_df.loc[:, ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y']].values
-        data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'], :]
+        # Extract relevant data from dataframe as array
+        grid_columns = ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y', 'interp_velocity_X', 'interp_velocity_Y']
+        data= self.grid_df.loc[:, grid_columns].values
 
-        x_center = data[:self.__grid_dict['Nsquares'], 2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-        y_center = data[:self.__grid_dict['Nsquares'], 3].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        # Find number of grid squares in each dimension
+        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
+        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
+        Nsquares = Nx * Ny
 
+        # Extract data in the wanted frame range
+        data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, :]
+   
+        # Extract grid centers
+        x_center = data[:Nsquares, 2].reshape(Ny, Nx)
+        y_center = data[:Nsquares, 3].reshape(Ny, Nx)
 
+        # Define velocity indices based on whether interpolated velocities are used or not
+        if use_interpolated_velocities:
+            vx_idx, vy_idx = grid_columns.index('interp_velocity_X'), grid_columns.index('interp_velocity_Y')
+        else:
+            vx_idx, vy_idx = grid_columns.index('mean_velocity_X'), grid_columns.index('mean_velocity_Y')
+        
         if calculate_average:
-            arr_vx = data[:, -2].reshape(Nframes, self.__grid_dict['Nsquares'])
-            arr_vy = data[:, -1].reshape(Nframes, self.__grid_dict['Nsquares'])
+            arr_vx = data[:, vx_idx].reshape(Nframes, Nsquares)
+            arr_vy = data[:, vy_idx].reshape(Nframes, Nsquares)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                arr_vx = np.nanmean(arr_vx, axis = 0).reshape(Ny, Nx)
+                arr_vy = np.nanmean(arr_vy, axis = 0).reshape(Ny, Nx)
 
             unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
 
@@ -1237,13 +1301,15 @@ dimension and twice the average cell diameter: ", Ngrid)
                                 title=title)         
         else:  
             if animate:
-                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, plotter,)
+                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, Nx, Ny, vx_idx, vy_idx, fig, plotter,)
                 self.__animator(data, plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
             else:
                 for i in range(frame_range[0], frame_range[1]):
                     fig, ax = plt.subplots()
-                    arr_vx = data[data[:, 0] == i,-2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                    arr_vy = data[data[:, 0] == i, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                    frame_mask = (data[:, 0] == i)
+                    arr_vx = data[frame_mask, vx_idx].reshape(Ny, Nx)
+                    arr_vy = data[frame_mask, vy_idx].reshape(Ny, Nx)
+                    nan_mask = np.isnan(data[frame_mask, grid_columns.index('mean_velocity_X')]).reshape(Ny, Nx)
                     plotter(x_center, y_center, arr_vx, arr_vy, i=i)
         if show:
             plt.show()
@@ -1683,141 +1749,67 @@ dimension and twice the average cell diameter: ", Ngrid)
         # Store density fluctuation dataframe as attribute and return
         self.density_fluctuations_df = fluc_df
         return fluc_df
-
-    def calculate_grid_statistics(self, grid_boundaries = None, Ngrid = None, include_features = [], \
-                               save_csv = True, name = None):
+  
+    def __interpolate_grid_velocities(self, interpolation_method = 'cubic'):
         """
-        Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
-        As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
-        as the mean number density and velocity of the cells in each grid is provided. Any additional spot features can be included
-        as well
+        Interpolates the missing velocities in the grid dataframe using the grid centers as interpolation points.
 
         Parameters:
-        ----------
-        Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
-                The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square. If None, Ngrid is set to be
-                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
-                4 cells per grid square.
-        include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
-                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
-                            mean_velocity_X and mean_velocity_Y.
-                            The possible feature keys are the columns of the spots dataframe generated 
-                            by the function 'generate_csv_files'.
-        save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
-               It will be saved in the output_folder, if provided, otherwise in the image folder.
-
-        Returns:
-        -------
-        grid_df : pandas dataframe - dataframe containing the grid statistics for each frame.
+        -----------
+        interpolation_method : (string, default = 'cubic') - interpolation method to use. Possible values are 'linear', 'nearest' and 'cubic'.
         """
+ 
+        # Etract grid csv as array
+        grid_data = self.grid_df.values
 
-        cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
-        add_to_grid = []
-        for feature in include_features:
-            if feature not in cols:
-                cols.append(feature)    
-                add_to_grid.append("mean_" + feature.lower())
-
-        # Extract relevant data from dataframe as array
-        data = self.spots_df.loc[:, cols].values.astype('float')
-
+        # The columns of the grid dataframe for reference
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
-        grid_columns.extend(add_to_grid)
 
-        # Initialize necessary variables
-        if grid_boundaries is None:
-            self.__initialize_basic_attributes()
-            Lx, Ly = self.__grid_dict['Lx'], self.__grid_dict['Ly']
-            xmin, xmax = self.__grid_dict['xmin'], self.__grid_dict['xmax']
-            ymin, ymax = self.__grid_dict['ymin'], self.__grid_dict['ymax']
-        else:
-            Lx = grid_boundaries[0][1] - grid_boundaries[0][0]
-            Ly = grid_boundaries[1][1] - grid_boundaries[1][0]
-            xmin, xmax = grid_boundaries[0][0], grid_boundaries[0][1]
-            ymin, ymax = grid_boundaries[1][0], grid_boundaries[1][1]
-  
-        av_diameter = 2 * self.spots_df['Radius'].mean()
-        # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
-        if Ngrid is None: 
-            Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
-            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial \
-                  dimension and twice the average cell diameter: ", Ngrid)
+        # Find grid centers
+        x_centers = np.unique(grid_data[:, grid_columns.index('x_center')])
+        y_centers = np.unique(grid_data[:, grid_columns.index('y_center')])
 
-        # Initialize grid dictionary
-        self.__initialize_grid(Ngrid)
+        # Create grid stack, ie. array of all grid centers with shape (Ngrid**2, 2)
+        grid_stack = np.array(np.meshgrid(x_centers, y_centers)).T.reshape(-1,2)
 
-        # Set remaining grid variables
-        if grid_boundaries is None:
-            grid_len = self.__grid_dict['grid_len']
-            Nsquares = self.__grid_dict['Nsquares']
-            Nx, Ny = self.__grid_dict['Nx'], self.__grid_dict['Ny']
-        else:
-            if Lx > Ly:
-                grid_len = Ly / Ngrid
-                residual_x = Lx % grid_len
-                xmin, xmax = xmin + residual_x / 2, xmax - residual_x / 2
-                Nx, Ny = int(np.floor(Ngrid * Lx / Ly)), Ngrid
-                Nsquares = Nx * Ny
-            elif Lx <= Ly:
-                grid_len = Lx / Ngrid
-                residual_y = Ly % grid_len
-                ymin, ymax = ymin + residual_y / 2, ymax - residual_y / 2
-                Nx, Ny = Ngrid, int(np.floor(Ngrid * Ly / Lx))
-                Nsquares = Nx * Ny
+        # Initialize array for interpolated velocities
+        v_stack_full = np.zeros([0,2])
 
-        # Print information about the length scales
-        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
-        print("Dimensions of region to be gritted: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
-        
-        # Initialize grid array
-        grid_arr = np.ones([self.__Nframes * Nsquares, len(grid_columns)])
+        for frame in np.arange(self.__Nframes):
+            # get mask for current frame
+            frame_mask = (grid_data[:, grid_columns.index('Frame')] == frame)
 
-        # Loop over all frames
-        for i, frame in enumerate(np.arange(self.__Nframes)):
-            arr_T = data[data[:, 0] == frame]
-            time = arr_T[0, 3]
-            Ngrid_count = 0
-            for y in np.linspace(ymax - grid_len, ymin, Ny):
-                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + grid_len)
-                arr_Y = arr_T[mask]
-                for x in np.linspace(xmin, xmax - grid_len, Nx):
-                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
+            # Extract velocities for current frame
+            vx = grid_data[frame_mask, grid_columns.index('mean_velocity_X')]
+            vy = grid_data[frame_mask, grid_columns.index('mean_velocity_Y')]
+
+            # Stack velocities, into array with shape (Ngrid**2, 2)
+            v_stack = np.vstack([vx, vy]).T
             
-                    if mask.sum() == 0:
-                        grid_arr[frame * Nsquares + Ngrid_count, 0:7] = \
-                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, 0]
-                        grid_arr[frame * Nsquares + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
-                    else:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore", category=RuntimeWarning)
-                            vx = np.nanmean(arr_Y[mask, 4])
-                            vy = np.nanmean(arr_Y[mask, 5])
+            # Find nan values
+            nan_mask = np.isnan(v_stack[:,0])
 
-                        # If true, return the number of cells in each grid as opposed to the density
-                        cell_number = mask.sum() 
-                        density = cell_number / (grid_len**2)     
+            # Interpolate nan values for each component
+            for i in [0,1]:
+                v_stack[nan_mask, i] = griddata(grid_stack[~nan_mask], v_stack[~nan_mask,i], \
+                                                grid_stack[nan_mask], method = interpolation_method)
+                
+                # Find remaining nan values
+                remaining_nans_mask = np.isnan(v_stack[:,i])
 
-                        grid_arr[frame * Nsquares + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + grid_len / 2, \
-                                                                y + grid_len / 2, cell_number, density, vx, vy]
-                        # Add additional features to grid (if any)
-                        for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * Nsquares + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                # Estimate remaning nan points at the boundary by nearest interpolation
+                if remaining_nans_mask.any():
+                    v_stack[remaining_nans_mask, i] = griddata(grid_stack[~remaining_nans_mask], v_stack[~remaining_nans_mask,i], \
+                                                            grid_stack[remaining_nans_mask], method='nearest')
 
-                    Ngrid_count += 1
+            v_stack_full = np.vstack([v_stack_full, v_stack])
 
-        self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
-        
-        # Print average number of cells per grid
-        print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+        self.grid_df['interp_velocity_X'] = v_stack_full[:,0]
+        self.grid_df['interp_velocity_Y'] = v_stack_full[:,1]
+        return
 
-        if save_csv:
-            name = self.__generate_filename(name, append = '_grid_statistics.csv')
-            self.grid_df.to_csv(os.path.join(self.output_folder, name), index=False)
-            print("\nGrid dataframe saved as csv file at: ", os.path.join(self.output_folder, name),)
 
-        return self.grid_df
+
 
 
 ##  NOGET MED: 

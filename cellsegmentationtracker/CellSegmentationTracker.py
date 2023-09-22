@@ -224,6 +224,7 @@ class CellSegmentationTracker:
                                          'MAX_FRAME_GAP': 2,
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
+                                         'ALLOW_GAP_CLOSING': True
              }
         self.unit_conversion_default_values = {   'frame_interval_in_physical_units': 1.0,
                                                   'physical_length_unit_name': 'pixels',

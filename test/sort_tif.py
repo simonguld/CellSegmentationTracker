@@ -70,6 +70,7 @@ trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
                                         'MAX_FRAME_GAP': 2,
                                         'ALLOW_TRACK_SPLITTING': False, 
                                         'ALLOW_TRACK_MERGING': False,
+                                        'ALLOW_GAP_CLOSING': True
             }
 
 # Now having set all parameters, we are ready to initialise the CellSegmentationTracker
