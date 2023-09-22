@@ -454,7 +454,7 @@ plot_velocity_field(mode = 'field', frame_range = [0,0], calculate_average = Fal
 Plot or animate the velocity field or velocity streamlines for a given frame range.
 
 Parameters:
-- **mode : (string, default = 'field_lines')**
+- **mode : (string, default = 'field')**
     - mode of visualization. Can be 'field' or 'streamlines'
 - **frame_range : (list of ints, default=[0,0])**
     - range of frames to visualize. Left endpoint is included, right endpoint is not.
