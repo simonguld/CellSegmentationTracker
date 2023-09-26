@@ -5,6 +5,64 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 
 
+if 0:
+    def __interpolate_grid_velocities(self, interpolation_method = 'cubic'):
+        """
+        Interpolates the missing velocities in the grid dataframe using the grid centers as interpolation points.
+
+        Parameters:
+        -----------
+        interpolation_method : (string, default = 'cubic') - interpolation method to use. Possible values are 'linear', 'nearest' and 'cubic'.
+        """
+ 
+        # Etract grid csv as array
+        grid_data = self.grid_df.values
+
+        # The columns of the grid dataframe for reference
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
+
+        # Find grid centers
+        x_centers = np.unique(grid_data[:, grid_columns.index('x_center')])
+        y_centers = np.unique(grid_data[:, grid_columns.index('y_center')])
+
+        # Create grid stack, ie. array of all grid centers with shape (Ngrid**2, 2)
+        grid_stack = np.array(np.meshgrid(x_centers, y_centers)).T.reshape(-1,2)
+
+        # Initialize array for interpolated velocities
+        v_stack_full = np.zeros([0,2])
+
+        for frame in np.arange(self.__Nframes):
+            # get mask for current frame
+            frame_mask = (grid_data[:, grid_columns.index('Frame')] == frame)
+
+            # Extract velocities for current frame
+            vx = grid_data[frame_mask, grid_columns.index('mean_velocity_X')]
+            vy = grid_data[frame_mask, grid_columns.index('mean_velocity_Y')]
+
+            # Stack velocities, into array with shape (Ngrid**2, 2)
+            v_stack = np.vstack([vx, vy]).T
+            
+            # Find nan values
+            nan_mask = np.isnan(v_stack[:,0])
+
+            # Interpolate nan values for each component
+            for i in [0,1]:
+                v_stack[nan_mask, i] = griddata(grid_stack[~nan_mask], v_stack[~nan_mask,i], \
+                                                grid_stack[nan_mask], method = interpolation_method)
+                
+                # Find remaining nan values
+                remaining_nans_mask = np.isnan(v_stack[:,i])
+
+                # Estimate remaning nan points at the boundary by nearest interpolation
+                if remaining_nans_mask.any():
+                    v_stack[remaining_nans_mask, i] = griddata(grid_stack[~remaining_nans_mask], v_stack[~remaining_nans_mask,i], \
+                                                            grid_stack[remaining_nans_mask], method='nearest')
+
+            v_stack_full = np.vstack([v_stack_full, v_stack])
+
+        self.grid_df['interp_velocity_X'] = v_stack_full[:,0]
+        self.grid_df['interp_velocity_Y'] = v_stack_full[:,1]
+        return
 
 
 def main():

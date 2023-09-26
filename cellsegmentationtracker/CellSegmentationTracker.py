@@ -1,5 +1,7 @@
 ## Author: Simon Guldager Andersen
-## Date (latest update): 2023-08-24
+## Date (latest update): 2023-09-26
+## License: MIT License
+
 
 ## Imports:
 import os
@@ -15,6 +17,8 @@ import seaborn as sns
 import pandas as pd
 import xml.etree.ElementTree as et
 from sklearn.neighbors import KDTree
+from scipy.interpolate import griddata
+
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani

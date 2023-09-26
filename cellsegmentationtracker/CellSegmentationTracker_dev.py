@@ -1,11 +1,11 @@
 ## Author: Simon Guldager Andersen
-## Date (latest update): 2023-08-24
+## Date (latest update): 2023-09-26
 
 
 ### -----------------------------------------------------------------
 
 # This is a script for developing and extending the CellSegmentationTracker module
-# It is not meant to be used by the user, but rather to be used by the developer
+# It is not meant for the user
 
 ### -----------------------------------------------------------------
 
@@ -27,6 +27,7 @@ import pandas as pd
 import xml.etree.ElementTree as et
 from sklearn.neighbors import KDTree
 from scipy.interpolate import griddata
+from scipy.io import savemat
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
@@ -334,7 +335,7 @@ class CellSegmentationTracker:
         split_features = feature.split('_')
         if feature == 'cell_number':
             return 'Cell number'
-        elif feature == 'number_density':
+        elif feature in ['number_density', 'interp_number_density']:
             return 'Number density' if feature_unit is None else 'Number density' + rf" ({feature_unit})"
         else:
             if len(split_features) == 1:
@@ -631,6 +632,66 @@ class CellSegmentationTracker:
         self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
         return
     
+    def __interpolate_grid_features(self, feature_list, interpolation_method = 'cubic'):
+        """
+        Interpolates the missing velocities in the grid dataframe using the grid centers as interpolation points.
+
+        Parameters:
+        -----------
+        interpolation_method : (string, default = 'cubic') - interpolation method to use. Possible values are 'linear', 'nearest' and 'cubic'.
+        """
+        # Etract grid csv as array
+        grid_data = self.grid_df.values
+
+        # The columns of the grid dataframe
+        grid_columns = self.grid_df.columns.to_list()
+
+        # Find column indices of features
+        feature_indices = [grid_columns.index(feature) for feature in feature_list]
+
+        # Find grid centers
+        x_centers = np.unique(grid_data[:, grid_columns.index('x_center')])
+        y_centers = np.unique(grid_data[:, grid_columns.index('y_center')])
+
+        # Create grid stack, ie. array of all grid centers with shape (Ngrid**2, 2)
+        grid_stack = np.array(np.meshgrid(x_centers, y_centers)).T.reshape(-1,2)
+
+        # Initialize array for interpolated scalar features
+        stack_full = np.zeros([0, len(feature_list)])
+
+        for frame in np.arange(self.__Nframes):
+            # get mask for current frame
+            frame_mask = (grid_data[:, grid_columns.index('Frame')] == frame)
+
+            # Extract features for current frame
+            features = grid_data[frame_mask][:, feature_indices]
+
+            # Interpolate features
+            for idx in np.arange(len(feature_list)):
+                # Find nan values
+                nan_mask = np.isnan(features[:,idx])
+
+                # Interpolate nan values
+                features[nan_mask, idx] = griddata(grid_stack[~nan_mask], features[~nan_mask,idx], \
+                                                            grid_stack[nan_mask], method = interpolation_method)
+                
+                # Find remaining nan values
+                remaining_nans_mask = np.isnan(features[:,idx])
+
+                # Estimate remaning nan points at the boundary by nearest interpolation
+                if remaining_nans_mask.any():
+                    features[remaining_nans_mask, idx] = griddata(grid_stack[~remaining_nans_mask],\
+                                                                 features[~remaining_nans_mask,idx], \
+                                                            grid_stack[remaining_nans_mask], method='nearest')
+
+            stack_full = np.vstack([stack_full, features])
+
+        # Add interpolated features to grid dataframe
+        for i, feature in enumerate(feature_list):
+            feature_name = 'interp_' + feature.split('mean_')[-1]
+            self.grid_df[feature_name] = stack_full[:,i]
+        return
+
     def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None, feature_unit = None):
         """
         Plots a heatmap of the given feature for a given frame.
@@ -662,7 +723,7 @@ class CellSegmentationTracker:
         ax.set_yticks(ticks = np.linspace(0.5, Ny - 0.5, 4), labels=yticklabels)
         return
 
-    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, title = None):
+    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, nan_mask = None, title = None):
         """
         Plot the velocity field for a given frame.
         """
@@ -674,13 +735,32 @@ class CellSegmentationTracker:
                 time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
 
+    
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
         plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
+
+        if nan_mask is not None:
+            if nan_mask.sum() > 0:
+                
+                vx_nan_arr = np.zeros_like(VX)
+                vy_nan_arr = np.zeros_like(VY)
+
+                vx_nan_arr[nan_mask] = VX[nan_mask]
+                vx_nan_arr[~nan_mask] = np.nan
+
+                vy_nan_arr[nan_mask] = VY[nan_mask]
+                vy_nan_arr[~nan_mask] = np.nan
+
+                plt.quiver(X, Y, vx_nan_arr, vy_nan_arr, units='dots', scale_units='dots', color = 'r', label = 'Interpolated')
+                #plt.xlim([X.min(), X.max() + 0.1*X.max()])
+                plt.ylim([Y.min(), Y.max() + 0.06*Y.max()])
+                plt.legend(loc = 'upper right', bbox_to_anchor=(1, 1), fontsize = 9)
+
         return
 
-    def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, title = None):
+    def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, nan_mask = None, title = None):
         """
         Plot the velocity streamlines for a given frame.
         """
@@ -696,21 +776,40 @@ class CellSegmentationTracker:
         plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
+
+        if nan_mask is not None:
+            if nan_mask.sum() > 0:
+                
+                plt.plot(X[nan_mask], Y[nan_mask], 'rs', ms=1, label = 'Interpolated')
+
+                plt.ylim([Y.min(), Y.max() + 0.06*Y.max()])
+                plt.legend(loc = 'upper right', bbox_to_anchor=(1, 1), fontsize = 9)
         return
 
-    def __animate_flow_field(self, i, X, Y, arr, Nx, Ny, vx_idx, vy_idx, fig, fn,):
+    def __animate_flow_field(self, i, X, Y, arr, Nx, Ny, vx_idx, vy_idx, fig, fn, plot_interpolated_field, velocity_index = None):
         """
         Animate the flow field for a given frame. Used as a wrapper for the animator function.
         """
-
         # we want a fresh figure everytime
         fig.clf()
-        # add subplot, aka axis
+
+        # find frame mask
+        frame_mask = arr[:, 0] == i
+
+        #
+        grid_columns = self.grid_df.columns.to_list()
+        
         # load the frame
-        arr_vx = arr[arr[:, 0] == i][:, vx_idx].reshape(Ny, Nx)
-        arr_vy = arr[arr[:, 0] == i][:, vy_idx].reshape(Ny, Nx)
+        arr_vx = arr[frame_mask, vx_idx].reshape(Ny, Nx)
+        arr_vy = arr[frame_mask, vy_idx].reshape(Ny, Nx)
+
+        if plot_interpolated_field:
+            nan_mask = np.isnan(arr[frame_mask, velocity_index]).reshape(Ny, Nx)
+        else:
+            nan_mask = None
+
         # call the global function
-        fn(X, Y, arr_vx, arr_vy, i=i)
+        fn(X, Y, arr_vx, arr_vy, i=i, nan_mask = nan_mask)
         return
         
     def __animator(self, arr, fn, rng, animate_wrapper = None, inter=200, show=True):
@@ -749,6 +848,65 @@ class CellSegmentationTracker:
             plt.show()
         return
 
+    def __save_grid_as_mat_file(self, name, x_increases_left_to_right = True):
+        """
+        Save grid dataframe as mat file.
+        """
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns = self.grid_df.columns.to_list()
+        grid_columns.remove('Ngrid')
+        grid_dict = {}
+
+        data= self.grid_df.loc[:, grid_columns].values
+
+        # Find number of grid squares in each dimension
+        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
+        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
+        Nsquares = Nx * Ny
+
+        # Extract grid centers
+        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
+        # Flip to get increasing y_values
+        y_center = np.flip(data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx), axis = 0)
+
+        if not x_increases_left_to_right:
+            x_center = x_center.T
+            y_center = y_center.T
+
+        # Add frame and time to grid dict
+        for key in ['Frame', 'T']:
+            grid_dict.update({key: self.grid_df[key].unique()})
+
+        # Add grid centers to grid dict
+        Nframes = len(grid_dict['Frame'])
+        X = np.zeros([Nframes, 1], dtype = object)
+        Y = np.zeros([Nframes, 1], dtype = object)
+        for i in np.arange(Nframes):
+            X[i, 0] = x_center
+            Y[i, 0] = y_center
+        grid_dict.update({'x_center': X, 'y_center': Y})
+
+        remaining_cols = grid_columns[grid_columns.index('cell_number'):]
+
+        # Add grid features to grid dict
+        cell_arr = np.zeros([Nframes, len(remaining_cols)], dtype = object)
+        for i in np.arange(Nframes):
+            frame_mask = data[:, grid_columns.index('Frame')] == i
+            for j, key in enumerate(remaining_cols):
+                if x_increases_left_to_right:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0)
+                else:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0).T
+
+        # update grid dict
+        for i, key in enumerate(remaining_cols):
+            grid_dict.update({key: np.expand_dims(cell_arr[:, i], axis = 1)})
+
+        # Save grid dict as mat file
+        filename = self.__generate_filename(name, append = '_grid_statistics.mat')
+        savemat(os.path.join(self.output_folder, filename), grid_dict)
+        print(f"Saved grid statistics as mat file to: {os.path.join(self.output_folder, filename)}")
+        return
     
     #### Public methods ####
 
@@ -1004,7 +1162,7 @@ class CellSegmentationTracker:
         return
 
     def calculate_grid_statistics(self, grid_boundaries = None, Ngrid = None, include_features = [], \
-                               interpolation_method = 'cubic', save_csv = True, name = None):
+                               interpolate_features = True, interpolation_method = 'cubic', save_csv = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
         As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
@@ -1025,8 +1183,11 @@ class CellSegmentationTracker:
                             mean_velocity_X and mean_velocity_Y.
                             The possible feature keys are the columns of the spots dataframe generated 
                             by the function 'generate_csv_files'.
-        interpolation_method : (string, default = 'cubic') - interpolation method to use to estimate nan velocities. 
-                               Possible values are 'linear', 'nearest' and 'cubic'.
+        interpolate_features : (bool, default = True) - whether to interpolate nan values in the velocity and scalar fields.
+                               If true, (and nans are present), the interpolated values are added to the grid dataframe as well.
+        interpolation_method : (string, default = 'cubic') - interpolation method to use to estimate nan values. 
+                               Possible values are 'linear', 'nearest' and 'cubic'. Nan values at points where 'linear' and 'cubic' are not
+                               defined are estimated by 'nearest'.
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
         name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
                It will be saved in the output_folder, if provided, otherwise in the image folder.
@@ -1108,9 +1269,10 @@ class CellSegmentationTracker:
                 for x in np.linspace(xmin, xmax - grid_len, Nx):
                     mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
             
+                    # If no cells in grid, set all values except for cell_number to nan
                     if mask.sum() == 0:
                         grid_arr[frame * Nsquares + Ngrid_count, 0:7] = \
-                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, 0]
+                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, np.nan]
                         grid_arr[frame * Nsquares + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
                     else:
                         with warnings.catch_warnings():
@@ -1132,13 +1294,26 @@ class CellSegmentationTracker:
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
 
-        # Interpolate velocities if there are nan values(interpolated velocities will be saved as new columns)
-        if np.isnan(self.grid_df['mean_velocity_X']).any():
-            print("\nInterpolating velocities...")
-            self.__interpolate_grid_velocities(interpolation_method = interpolation_method)
-        
+        if interpolate_features:
+            # Interpolate features if there are nan values(interpolated velocities will be saved as new columns)
+            feature_list = add_to_grid
+            for feature in feature_list:
+                if not np.isnan(self.grid_df[feature]).any():
+                    feature_list.remove(feature)       
+            if np.isnan(self.grid_df['mean_velocity_X']).any():
+                feature_list = ['mean_velocity_X', 'mean_velocity_Y'] + feature_list
+            if np.isnan(self.grid_df['number_density']).any():
+                feature_list = ['number_density'] + feature_list
+
+            if len(feature_list) > 0:
+                print("\nInterpolating features...")
+                self.__interpolate_grid_features(feature_list,\
+                                                  interpolation_method = interpolation_method)
+
         # Print average number of cells per grid
         print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+
+        self.__save_grid_as_mat_file(name)
 
         if save_csv:
             name = self.__generate_filename(name, append = '_grid_statistics.csv')
@@ -1238,6 +1413,7 @@ class CellSegmentationTracker:
                             frame range is calculated and visualized.
         animate : (bool, default=True) - if True, the velocity field is animated over the given frame range.
         frame_interval : (int, default=1200) - time between frames in ms (for the animation).
+        use_interpolated_velocities : (bool, default=True) - if True, the interpolated velocities are used, if available.
         show : (bool, default=True) - if True, the velocity field is shown.
         """
 
@@ -1258,8 +1434,13 @@ class CellSegmentationTracker:
         Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
         frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
+        # Check if interpolated velocities are available
+        use_interpolated_velocities = use_interpolated_velocities if 'interp_velocity_X' in self.grid_df.columns else False
+
         # Extract relevant data from dataframe as array
-        grid_columns = ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y', 'interp_velocity_X', 'interp_velocity_Y']
+        grid_columns = ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y',]
+        if use_interpolated_velocities:
+            grid_columns.extend(['interp_velocity_X', 'interp_velocity_Y'])
         data= self.grid_df.loc[:, grid_columns].values
 
         # Find number of grid squares in each dimension
@@ -1271,8 +1452,8 @@ class CellSegmentationTracker:
         data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, :]
    
         # Extract grid centers
-        x_center = data[:Nsquares, 2].reshape(Ny, Nx)
-        y_center = data[:Nsquares, 3].reshape(Ny, Nx)
+        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
+        y_center = data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx)
 
         # Define velocity indices based on whether interpolated velocities are used or not
         if use_interpolated_velocities:
@@ -1297,11 +1478,11 @@ class CellSegmentationTracker:
                 t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                 time_label = f'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
-            plotter(x_center, y_center, arr_vx, arr_vy, \
-                                title=title)         
+            plotter(x_center, y_center, arr_vx, arr_vy, title=title)         
         else:  
             if animate:
-                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, Nx, Ny, vx_idx, vy_idx, fig, plotter,)
+                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, Nx, Ny, vx_idx, vy_idx,\
+                                                             fig, plotter,plot_interpolated_field=use_interpolated_velocities, velocity_index = grid_columns.index('mean_velocity_X'))
                 self.__animator(data, plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
             else:
                 for i in range(frame_range[0], frame_range[1]):
@@ -1309,8 +1490,12 @@ class CellSegmentationTracker:
                     frame_mask = (data[:, 0] == i)
                     arr_vx = data[frame_mask, vx_idx].reshape(Ny, Nx)
                     arr_vy = data[frame_mask, vy_idx].reshape(Ny, Nx)
-                    nan_mask = np.isnan(data[frame_mask, grid_columns.index('mean_velocity_X')]).reshape(Ny, Nx)
-                    plotter(x_center, y_center, arr_vx, arr_vy, i=i)
+    
+                    if use_interpolated_velocities:
+                        nan_mask = np.isnan(data[frame_mask, grid_columns.index('mean_velocity_X')]).reshape(Ny, Nx)
+                    else:
+                        nan_mask = None
+                    plotter(x_center, y_center, arr_vx, arr_vy, i=i, nan_mask=nan_mask,)
         if show:
             plt.show()
         return
@@ -1750,66 +1935,6 @@ class CellSegmentationTracker:
         self.density_fluctuations_df = fluc_df
         return fluc_df
   
-    def __interpolate_grid_velocities(self, interpolation_method = 'cubic'):
-        """
-        Interpolates the missing velocities in the grid dataframe using the grid centers as interpolation points.
-
-        Parameters:
-        -----------
-        interpolation_method : (string, default = 'cubic') - interpolation method to use. Possible values are 'linear', 'nearest' and 'cubic'.
-        """
- 
-        # Etract grid csv as array
-        grid_data = self.grid_df.values
-
-        # The columns of the grid dataframe for reference
-        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
-
-        # Find grid centers
-        x_centers = np.unique(grid_data[:, grid_columns.index('x_center')])
-        y_centers = np.unique(grid_data[:, grid_columns.index('y_center')])
-
-        # Create grid stack, ie. array of all grid centers with shape (Ngrid**2, 2)
-        grid_stack = np.array(np.meshgrid(x_centers, y_centers)).T.reshape(-1,2)
-
-        # Initialize array for interpolated velocities
-        v_stack_full = np.zeros([0,2])
-
-        for frame in np.arange(self.__Nframes):
-            # get mask for current frame
-            frame_mask = (grid_data[:, grid_columns.index('Frame')] == frame)
-
-            # Extract velocities for current frame
-            vx = grid_data[frame_mask, grid_columns.index('mean_velocity_X')]
-            vy = grid_data[frame_mask, grid_columns.index('mean_velocity_Y')]
-
-            # Stack velocities, into array with shape (Ngrid**2, 2)
-            v_stack = np.vstack([vx, vy]).T
-            
-            # Find nan values
-            nan_mask = np.isnan(v_stack[:,0])
-
-            # Interpolate nan values for each component
-            for i in [0,1]:
-                v_stack[nan_mask, i] = griddata(grid_stack[~nan_mask], v_stack[~nan_mask,i], \
-                                                grid_stack[nan_mask], method = interpolation_method)
-                
-                # Find remaining nan values
-                remaining_nans_mask = np.isnan(v_stack[:,i])
-
-                # Estimate remaning nan points at the boundary by nearest interpolation
-                if remaining_nans_mask.any():
-                    v_stack[remaining_nans_mask, i] = griddata(grid_stack[~remaining_nans_mask], v_stack[~remaining_nans_mask,i], \
-                                                            grid_stack[remaining_nans_mask], method='nearest')
-
-            v_stack_full = np.vstack([v_stack_full, v_stack])
-
-        self.grid_df['interp_velocity_X'] = v_stack_full[:,0]
-        self.grid_df['interp_velocity_Y'] = v_stack_full[:,1]
-        return
-
-
-
 
 
 ##  NOGET MED: 
