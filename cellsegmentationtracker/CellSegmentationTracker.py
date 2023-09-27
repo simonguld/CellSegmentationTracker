@@ -779,10 +779,7 @@ class CellSegmentationTracker:
                 vy_nan_arr[~nan_mask] = np.nan
 
                 plt.quiver(X, Y, vx_nan_arr, vy_nan_arr, units='dots', scale_units='dots', color = 'r', label = 'Interpolated')
-                #plt.xlim([X.min(), X.max() + 0.1*X.max()])
-                plt.ylim([Y.min(), Y.max() + 0.06*Y.max()])
-                plt.legend(loc = 'upper right', bbox_to_anchor=(1, 1), fontsize = 9)
-
+                plt.legend(loc = 'upper right', bbox_to_anchor=(0.1, 1.07), fontsize = 9, fancybox=True,framealpha=0.05)
         return
 
     def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, nan_mask = None, title = None):
@@ -803,12 +800,9 @@ class CellSegmentationTracker:
         plt.title(title)
 
         if nan_mask is not None:
-            if nan_mask.sum() > 0:
-                
+            if nan_mask.sum() > 0:               
                 plt.plot(X[nan_mask], Y[nan_mask], 'rs', ms=1, label = 'Interpolated')
-
-                plt.ylim([Y.min(), Y.max() + 0.06*Y.max()])
-                plt.legend(loc = 'upper right', bbox_to_anchor=(1, 1), fontsize = 9)
+                plt.legend(loc = 'upper right', bbox_to_anchor=(0.1, 1.07), fontsize = 9, fancybox=True,framealpha=0.05)            
         return
 
     def __animate_flow_field(self, i, X, Y, arr, Nx, Ny, vx_idx, vy_idx, fig, fn, plot_interpolated_field, velocity_index = None):

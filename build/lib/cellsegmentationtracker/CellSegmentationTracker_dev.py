@@ -1,11 +1,11 @@
 ## Author: Simon Guldager Andersen
-## Date (latest update): 2023-08-24
+## Date (latest update): 2023-09-26
 
 
 ### -----------------------------------------------------------------
 
 # This is a script for developing and extending the CellSegmentationTracker module
-# It is not meant to be used by the user, but rather to be used by the developer
+# It is not meant for the user
 
 ### -----------------------------------------------------------------
 
@@ -26,6 +26,8 @@ import seaborn as sns
 import pandas as pd
 import xml.etree.ElementTree as et
 from sklearn.neighbors import KDTree
+from scipy.interpolate import griddata
+from scipy.io import savemat
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
@@ -51,42 +53,6 @@ np.set_printoptions(precision = 10, suppress=1e-14)
 
 ##TODO:
 
-##ESSENTIAL (DO FIRST)
-
-# TODO i prioriteret rækkefølge:::
-
-### document
-# 3) Impl. density fluctuations
-# --> (inkl fix impl.) 
-# -->[allow plotting rel. to av cell number also?]
-# --> allso number density vs denisty
-## TEST TEST TEST And read trough to get rid of errors
-# --> dur det på big data?
-
-
-# pixels --> physical if provided. ALSP (unit dict?)
-
-
-# EFTER SEND-OFF:
-
-### METHODS:
-
-# comp. speeds to trackmate
-
-# MSD and CRMSD
-# Nearest neighbors estimator?
-# Tas' method
-# vorticity???
-# try on nuclei data. works?
-# let frame --> t
-
-### HANDLING UNITS:
-# Done!
-
-### ATTRIBUTES
-# allow for user providing csvs????
-# make a print all features method
-
 ### VISUALIZATION
 # SPEND A LITTLE TIME ON:
 # make show_tracks opt?
@@ -103,68 +69,78 @@ np.set_printoptions(precision = 10, suppress=1e-14)
 # make roubst under other image formats?
 # make robust under color, multichannel etc?
 
-
-
 class CellSegmentationTracker:
 
     """
-    Documentation for CellSegmentationTracker class.
+    Documentation for CellSegmentationTracker class
+    -----------------------------------------------
+
 
     Parameters:
     ------------  
-    cellpose_folder_path: (str, default=None) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.
-                                On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose
-                                On MAC, it is typically found in 
+    cellpose_folder_path: (str, default=None) - The path to the Cellpose folder. It can be found in the virtual environment created for running cellpose.\
+                                On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose\
+                                On MAC, it is typically found in \
                                 ./path_to_anaconda_folder/envs/cellpose/lib/python3.[insert version here]/site-packages/cellpose
-    imagej_filepath: (str, default=None) - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder.
+                                
+    imagej_filepath: (str, default=None) - The file path to the ImageJ/Fiji executable. It can be found in the Fiji.app folder.\
                      If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided.
-    cellpose_python_filepath: (str, default=None) - The file path to the Cellpose Python program. 
-                              It can be found in the virtual environment created for running cellpose. 
-                              If you want to use CellSegmentationTracker for segmentation and tracking, 
+
+    cellpose_python_filepath: (str, default=None) - The file path to the Cellpose Python program. \
+                              It can be found in the virtual environment created for running cellpose. \
+                              If you want to use CellSegmentationTracker for segmentation and tracking, \
                               this parameter must be provided.
-    image_folder_path: (str, default=None) - The path to the .tif input image or to the folder containing .tif input images 
-                       for processing. If a folder is provided, CellSegmentationTracker will merge all images 
-                       (leaving the originals intact) in this folder to a file called ./merged.tif and run analysis 
-                       on this file. If not provided, an XML file must be provided instead, 
+
+    image_folder_path: (str, default=None) - The path to the .tif input image or to the folder containing .tif input images \
+                       for processing. If a folder is provided, CellSegmentationTracker will merge all images  \
+                       (leaving the originals intact) in this folder to a file called ./merged.tif and run analysis  \
+                       on this file. If not provided, an XML file must be provided instead,  \
                        and the class methods can then be used for postprocess analysis and for csv file generation
-    xml_path: (str, default=None) - If segmentation and tracking has already been carried out, the resulting 
+
+    xml_path: (str, default=None) - If segmentation and tracking has already been carried out, the resulting  \
               TrackMate XML file can be provided, and the class methods can be used for postprocess analysis
-    output_folder_path: (str, default=None) - The folder where output files will be saved. 
-                        If not specified, the image folder (if provided) will be used and otherwise the XML folder. 
+
+    output_folder_path: (str, default=None) - The folder where output files will be saved.  \
+                        If not specified, the image folder (if provided) will be used and otherwise the XML folder.  \
                         Note that XML files generated by the class will always be output to the image folder
-    use_model: (str, default='CYTO') - Specifies the Cellpose model to use for segmentation. 
-               Options include the Cellpose models 'CYTO', 'CYTO2', 'NUCLEI', 
-               as well the specialized models 'EPI500', 'EPI2500' and 'EPI6000'. 
+
+    use_model: (str, default='CYTO') - Specifies the Cellpose model to use for segmentation.  \
+               Options include the Cellpose models 'CYTO', 'CYTO2', 'NUCLEI',  \
+               as well the specialized models 'EPI500', 'EPI2500' and 'EPI6000'.  \
                For information on the specialized models, see the README file on github
+
     custom_model_path: (str, default=None) - If a custom Cellpose model is to be used, provide the path to the model here.
-    show_segmentation (bool, default=True) - Determines whether to open Fiji and display the segmentation results
+
+    show_segmentation (bool, default=True) - Determines whether to open Fiji and display the segmentation results  \
       interactively during processing. If True, Fiji must be closed before the script can continue.
+
     cellpose_dict:  (dict, default=dict()) - A dictionary containing additional parameters to pass to the Cellpose 
                     segmentation algorithm:
         - TARGET_CHANNEL (positive int, default = 0): What channel to use as the main channel for segmentation with cellpose.
-          0 means that cellpose will run on a grayscale combination of all channels. 
-          1 stands for the first channel, corresponding to the red channel in a RGB image. 
-          Similarly for 2 and 3, the second and third channel, corresponding to the green and blue channels in a RGB image.
+        0 means that cellpose will run on a grayscale combination of all channels. 
+        1 stands for the first channel, corresponding to the red channel in a RGB image. 
+        Similarly for 2 and 3, the second and third channel, corresponding to the green and blue channels in a RGB image.
         - OPTIONAL_CHANNEL_2 (positive int, default = 0): The cyto and cyto2 pretrained models have been trained on images 
-          with a second channels in which the cell nuclei were labeled. It is used as a seed to make the detection
-          of single cells more robust. It is optional and this parameter specifies in which channel are
-          the nuclei (1 to 3). Use 0 to skip using the second optional channel. 
-          For the nuclei model, this parameter is ignored.
+        with a second channels in which the cell nuclei were labeled. It is used as a seed to make the detection
+        of single cells more robust. It is optional and this parameter specifies in which channel are
+        the nuclei (1 to 3). Use 0 to skip using the second optional channel. 
+        For the nuclei model, this parameter is ignored.
         - CELL_DIAMETER (positive float, default = 0.0): Estimate of the cell diameter in the image, in pixel units. 
-          When set to 0.0, Cellpose automatically estimates the cell diameter. This is recommended, 
-          as Cellpose performs poorly when given an inacurrate cell diameter estimate.
+        When set to 0.0, Cellpose automatically estimates the cell diameter. This is recommended, 
+        as Cellpose performs poorly when given an inacurrate cell diameter estimate.
         - USE_GPU (boolean, default = False)
         - SIMPLIFY_CONTOURS (boolean, default = True): If True the 2D contours detected will be simplified. 
-          If False, they will follow exactly the pixel borders.
+        If False, they will follow exactly the pixel borders.
         - FLOW_THRESHOLD (positive float): The maximum allowed error of the flows for each mask. 
-          Increase this threshold if cellpose is not returning as many ROIs as you'd expect. 
-          Similarly, decrease this threshold if cellpose is returning too many ill-shaped ROIs. 
-          The default value is 0.4 for the Cellpose models and 'EPI500'. For 'EPI2500', and 'EPI6000', the default is 0.5.
+        Increase this threshold if cellpose is not returning as many ROIs as you'd expect. 
+        Similarly, decrease this threshold if cellpose is returning too many ill-shaped ROIs. 
+        The default value is 0.4 for the Cellpose models and 'EPI500'. For 'EPI2500', and 'EPI6000', the default is 0.5.
         - CELLPROB_THRESHOLD (float in [-6, 6]): The pixels greater than the cellprob_threshold are used to run dynamics 
-          and determine ROIs. Decrease this threshold if cellpose is not returning as many ROIs as you'd expect. 
-          Similarly, increase this threshold if cellpose is returning too ROIs particularly from dim areas. 
-          The default is 0.0 for the cellpose models. For 'EPI500', the default is 0.5, and for 'EPI2500', 
-          the default is -1.0.
+        and determine ROIs. Decrease this threshold if cellpose is not returning as many ROIs as you'd expect. 
+        Similarly, increase this threshold if cellpose is returning too ROIs particularly from dim areas. 
+        The default is 0.0 for the cellpose models. For 'EPI500', the default is 0.5, and for 'EPI2500', 
+        the default is -1.0.
+
     trackmate_dict: (dict, default=dict()) - A dictionary containing parameters for configuring the TrackMate LAPTracker. 
                     It has the following keys:
       - LINKING_MAX_DISTANCE (float, default = 15.0): The max distance between two consecutive spots, in physical units
@@ -205,19 +181,34 @@ class CellSegmentationTracker:
     Attributes:
     ------------
     img_folder: (str) - The path to the .tif input image folder containing, if provided
+
     xml_path: (str) - The path to the TrackMate XML file, if provided. If generated, it will be saved in the image folder
+
     output_folder: (str) - The path to the folder where output files will be saved.
+
     cellpose_dict: (dict) - A dictionary containing the parameters passed to the Cellpose segmentation algorithm
+
     trackmate_dict: (dict) - A dictionary containing the parameters passed to the TrackMate LAPTracker
-    cellpose_default_values: (dict) - A dictionary containing the default values for the parameters passed to the Cellpose
+
+    cellpose_default_values: (dict) - A dictionary containing the default values for the parameters passed to the Cellpose \
                              segmentation algorithm
-    trackmate_default_values: (dict) - A dictionary containing the default values for the parameters passed to the TrackMate
+
+    trackmate_default_values: (dict) - A dictionary containing the default values for the parameters passed to the TrackMate \
                               LAPTracker  
+
     pretrained_models: (list) - A list of the pretrained Cellpose models available for segmentation
+
     spots_df: (pandas.DataFrame) - A dataframe containing the spot data from the TrackMate XML file
+
     tracks_df: (pandas.DataFrame) - A dataframe containing the track data from the TrackMate XML file
+
     edges_df: (pandas.DataFrame) - A dataframe containing the edge data from the TrackMate XML file
+
     grid_df: (pandas.DataFrame) - A dataframe containing the grid data, if generated
+
+    msd_df: (pandas.DataFrame) - A dataframe containing the mean squared displacement data, if generated
+
+    crmsd_df: (pandas.DataFrame) - A dataframe containing the cage relative mean squared displacement data, if generated
     """
 
     def __init__(self, cellpose_folder_path = None, imagej_filepath = None, cellpose_python_filepath = None, image_folder_path = None, xml_path = None, output_folder_path = None,
@@ -227,7 +218,7 @@ class CellSegmentationTracker:
         self.__cellpose_folder_path = cellpose_folder_path
         self.__imagej_filepath = imagej_filepath
         self.__cellpose_python_filepath = cellpose_python_filepath     
-        self.__img_path = None    
+        
         self.__custom_model_path = custom_model_path
         self.__working_dir = os.getcwd()
         self.__class_path = os.path.dirname(os.path.realpath(__file__))
@@ -235,6 +226,7 @@ class CellSegmentationTracker:
 
         self.img_folder = image_folder_path
         self.xml_path = xml_path  
+        self.__img_path = self.img_folder if str(self.img_folder).endswith(".tif") else None
 
         if self.__cellpose_python_filepath is not None:
             self.__pretrained_models_paths = [os.path.join(self.__cellpose_folder_path, 'models', 'cyto'), \
@@ -251,6 +243,8 @@ class CellSegmentationTracker:
         if output_folder_path is None:
             if self.img_folder is not None:
                 self.output_folder = self.img_folder if os.path.isdir(self.img_folder) else os.path.dirname(self.img_folder)
+            elif self.xml_path is not None:
+                self.output_folder = os.path.dirname(self.xml_path)
             else:
                 self.output_folder = self.__working_dir
         else:
@@ -271,7 +265,6 @@ class CellSegmentationTracker:
         self.grid_df = None
         self.msd_df = None
         self.crmsd_df = None
-        self.density_fluctuations_df = None
 
         self.pretrained_models = ['CYTO', 'CYTO2', 'NUCLEI', 'EPI500', 'EPI2500', 'EPI6000']
 
@@ -291,6 +284,7 @@ class CellSegmentationTracker:
                                          'MAX_FRAME_GAP': 2,
                                          'ALLOW_TRACK_SPLITTING': False,
                                          'ALLOW_TRACK_MERGING': False,
+                                         'ALLOW_GAP_CLOSING': True
              }
         self.unit_conversion_default_values = {   'frame_interval_in_physical_units': 1.0,
                                                   'physical_length_unit_name': 'pixels',
@@ -309,12 +303,23 @@ class CellSegmentationTracker:
         self.__Ntracks = None
         self.__Nframes = None
         self.__convert_time_to_physical_units = False
-
-        self.__unit_conversion()
+        if self.xml_path is not None:
+            self.__unit_conversion()
 
     #### Private methods ####
-    
 
+    def __ensure_conversion_dict_validity(self):
+        """
+        Ensure that the unit conversion dictionary is valid.
+        """
+        if self.xml_path is not None:
+            self.__unit_conversion()
+
+        for key in self.unit_conversion_default_values.keys():
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+        return
+    
     def __generate_title(self, feature, feature_unit = None):
         """
         Generate title for plots.
@@ -322,7 +327,7 @@ class CellSegmentationTracker:
         split_features = feature.split('_')
         if feature == 'cell_number':
             return 'Cell number'
-        elif feature == 'number_density':
+        elif feature in ['number_density', 'interp_number_density']:
             return 'Number density' if feature_unit is None else 'Number density' + rf" ({feature_unit})"
         else:
             if len(split_features) == 1:
@@ -339,8 +344,12 @@ class CellSegmentationTracker:
             try:
                 name = os.path.basename(self.__img_path).strip(".tif")
             except:
-                name = 'CellSegmentationTracker'
+                try:
+                    name = os.path.basename(self.xml_path).strip(".xml")
+                except:
+                    name = 'CellSegmentationTracker'
             name = name + append if append is not None else name
+
         else:
             if not name.endswith('.csv'):
                 name = name + '.csv'
@@ -505,47 +514,41 @@ class CellSegmentationTracker:
         units of physical quantities to physical units.
 
         """
-        if self.xml_path is None:
-            for key in self.unit_conversion_default_values.keys():
-                if key not in self.unit_conversion_dict.keys():
-                    self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
-                    print(f'\n{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
-            return
-        else:
 
-            root = et.fromstring(open(self.xml_path).read())
+        root = et.fromstring(open(self.xml_path).read())
 
-            im_settings = root.find('Settings').find('ImageData') 
-            im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
-            dict_keys = ['frame_interval_in_physical_units']
-            dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
-            output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
-            im_conversion_list = []
+        im_settings = root.find('Settings').find('ImageData') 
+        im_settings_list = ['pixelwidth', 'pixelheight', 'timeinterval']
+        dict_keys = ['frame_interval_in_physical_units']
+        dict_key_names = ['physical_length_unit_name', 'physical_time_unit_name']
+        output_names = ['pixel width', 'pixel height', 'frame interval in physical units']
+        im_conversion_list = []
 
-            print("\n")
-            for  i, s in enumerate(im_settings_list):
-                im_conversion_list.append(float(im_settings.get(s)))
-                print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
+        print("\n")
+        for  i, s in enumerate(im_settings_list):
+            im_conversion_list.append(float(im_settings.get(s)))
+            print(f'{output_names[i].capitalize()} in TrackMate: {im_conversion_list[i]}')
 
-            for key in dict_key_names:
-                if key not in self.unit_conversion_dict.keys():
-                    self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
-                    print(f'\n{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
+        for key in dict_key_names:
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = self.unit_conversion_default_values[key]
+                print(f'{key} not provided. Using default value {self.unit_conversion_dict[key]}.')
 
-            for key in dict_keys:
-                if key not in self.unit_conversion_dict.keys():
-                    self.unit_conversion_dict[key] = im_conversion_list[-1]
-                    print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
-                else: 
-                    if self.unit_conversion_dict[key] != im_conversion_list[-1]:
-                        if im_conversion_list[-1] == 1:
-                            self.__convert_time_to_physical_units = True
-                            print("\nUsing time unit conversion: Time between frames = ", \
-                                self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
-                        else:
-                            print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
-                            self.unit_conversion_dict[key] = im_conversion_list[-1]         
-            return
+        for key in dict_keys:
+            if key not in self.unit_conversion_dict.keys():
+                self.unit_conversion_dict[key] = float(im_conversion_list[-1])
+                print(f'\n{output_names[-1].capitalize()} not provided. Using TrackMate value {im_conversion_list[-1]}.')
+            else: 
+                if self.unit_conversion_dict[key] != im_conversion_list[-1]:
+                    if im_conversion_list[-1] == 1:
+                        self.__convert_time_to_physical_units = True
+                        self.unit_conversion_dict[key] = float(self.unit_conversion_dict[key])
+                        print("\nUsing time unit conversion: Time between frames = ", \
+                              self.unit_conversion_dict[key], f" {self.unit_conversion_dict[dict_key_names[-1]].lower()}" )
+                    else:
+                        print(f'\n{key} provided does not match TrackMate value. Using TrackMate value {im_conversion_list[-1]} instead\n')
+                        self.unit_conversion_dict[key] = float(im_conversion_list[-1])
+        return
 
     def __save_csv(self, name = None):
         """
@@ -572,11 +575,10 @@ class CellSegmentationTracker:
             print("Saved edges csv file to: ", path_out_edges)
         return
 
-    def __initialize_grid(self, Ngrid):
+    def __initialize_basic_attributes(self):
         """
-        Initialize grid dictionary.
+        Initialize basic attributes like Nframes, Nspots etc.
         """
-  
         # Extract relevant data from dataframe as array
         cols = ['Frame', 'X', 'Y', 'TRACK_ID']
         data = self.spots_df.loc[:, cols].values.astype('float')
@@ -593,6 +595,15 @@ class CellSegmentationTracker:
 
         self.__grid_dict['Lx'] = self.__grid_dict['xmax'] - self.__grid_dict['xmin']
         self.__grid_dict['Ly'] = self.__grid_dict['ymax'] - self.__grid_dict['ymin']
+        return
+
+    def __initialize_grid(self, Ngrid):
+        """
+        Initialize grid dictionary.
+        """
+  
+        # Set basic attributes like Nframes, Ntracks etc
+        self.__initialize_basic_attributes()
    
         # Calculate number of grid squares in x and y direction
         if self.__grid_dict['Lx'] > self.__grid_dict['Ly']:
@@ -613,19 +624,86 @@ class CellSegmentationTracker:
         self.__grid_dict['Nsquares'] = self.__grid_dict['Nx'] * self.__grid_dict['Ny']
         return
     
+    def __interpolate_grid_features(self, feature_list, interpolation_method = 'cubic'):
+        """
+        Interpolates the missing velocities in the grid dataframe using the grid centers as interpolation points.
+
+        Parameters:
+        -----------
+        interpolation_method : (string, default = 'cubic') - interpolation method to use. Possible values are 'linear', 'nearest' and 'cubic'.
+        """
+        # Etract grid csv as array
+        grid_data = self.grid_df.values
+
+        # The columns of the grid dataframe
+        grid_columns = self.grid_df.columns.to_list()
+
+        # Find column indices of features
+        feature_indices = [grid_columns.index(feature) for feature in feature_list]
+
+        # Find grid centers
+        x_centers = grid_data[grid_data[:, grid_columns.index('Frame')] == 0, grid_columns.index('x_center')]
+        y_centers = grid_data[grid_data[:, grid_columns.index('Frame')] == 0, grid_columns.index('y_center')]
+
+        # Create grid stack, ie. array of all grid centers with shape (Ngrid**2, 2)
+        grid_stack = np.vstack([x_centers.flatten(), y_centers.flatten()]).T
+
+        # Initialize array for interpolated scalar features
+        stack_full = np.zeros([0, len(feature_list)])
+
+        for frame in np.arange(self.__Nframes):
+            # get mask for current frame
+            frame_mask = (grid_data[:, grid_columns.index('Frame')] == frame)
+
+            # Extract features for current frame
+            features = grid_data[frame_mask][:, feature_indices]
+
+            # Interpolate features
+            for idx in np.arange(len(feature_list)):
+                # Find nan values
+                nan_mask = np.isnan(features[:,idx])
+
+                # Interpolate nan values
+                features[nan_mask, idx] = griddata(grid_stack[~nan_mask], features[~nan_mask,idx], \
+                                                            grid_stack[nan_mask], method = interpolation_method)
+                
+                # Find remaining nan values
+                remaining_nans_mask = np.isnan(features[:,idx])
+
+                # Estimate remaning nan points at the boundary by nearest interpolation
+                if remaining_nans_mask.any():
+                    features[remaining_nans_mask, idx] = griddata(grid_stack[~remaining_nans_mask],\
+                                                                 features[~remaining_nans_mask,idx], \
+                                                            grid_stack[remaining_nans_mask], method='nearest')
+
+            stack_full = np.vstack([stack_full, features])
+
+        # Add interpolated features to grid dataframe
+        for i, feature in enumerate(feature_list):
+            feature_name = 'interp_' + feature.split('mean_')[-1]
+            self.grid_df[feature_name] = stack_full[:,i]
+        return
+
     def __heatmap_plotter(self, i, frame, feature, vmin, vmax, title=None, feature_unit = None):
         """
         Plots a heatmap of the given feature for a given frame.
         """  
-        arr_grid = frame.reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        
+        x_centers = self.grid_df['x_center'].unique()
+        y_centers = self.grid_df['y_center'].unique()
+        Nx, Ny = len(self.grid_df['x_center'].unique()), len(self.grid_df['y_center'].unique())
+        Nsquares = Nx * Ny
+        grid_len = x_centers[1] - x_centers[0]
 
-        xticklabels = np.round(np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
-        yticklabels = np.round(np.linspace(self.__grid_dict['ymax'], self.__grid_dict['ymin'], 4) + self.__grid_dict['grid_len'] / 2).astype('int')
+        arr_grid = frame.reshape(Ny, Nx)
+
+        xticklabels = np.round(np.linspace(min(x_centers), max(x_centers), 4) + grid_len / 2).astype('int')
+        yticklabels = np.round(np.linspace(max(y_centers), min(y_centers), 4) + grid_len / 2).astype('int')
 
         ax = sns.heatmap(arr_grid, cmap = 'viridis', vmin=vmin, vmax=vmax,)
 
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at t = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
@@ -633,36 +711,51 @@ class CellSegmentationTracker:
         ax.set(xlabel = rf"x ({self.unit_conversion_dict['physical_length_unit_name']})",\
                ylabel = rf"y ({self.unit_conversion_dict['physical_length_unit_name']})",  title = title)
         
-        ax.set_xticks(ticks = np.linspace(0.5,self.__grid_dict['Nx'] - 0.5, 4), labels=xticklabels)
-        ax.set_yticks(ticks = np.linspace(0.5, self.__grid_dict['Ny'] - 0.5, 4), labels=yticklabels)
+        ax.set_xticks(ticks = np.linspace(0.5,Nx - 0.5, 4), labels=xticklabels)
+        ax.set_yticks(ticks = np.linspace(0.5, Ny - 0.5, 4), labels=yticklabels)
         return
 
-    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, title = None):
+    def __velocity_field_plotter(self, X, Y, VX, VY, i = 0, nan_mask = None, title = None):
         """
         Plot the velocity field for a given frame.
         """
         unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
 
+    
         plt.quiver(X, Y, VX, VY, units='dots', scale_units='dots' )
         plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
-  
+
+        if nan_mask is not None:
+            if nan_mask.sum() > 0:
+                
+                vx_nan_arr = np.zeros_like(VX)
+                vy_nan_arr = np.zeros_like(VY)
+
+                vx_nan_arr[nan_mask] = VX[nan_mask]
+                vx_nan_arr[~nan_mask] = np.nan
+
+                vy_nan_arr[nan_mask] = VY[nan_mask]
+                vy_nan_arr[~nan_mask] = np.nan
+
+                plt.quiver(X, Y, vx_nan_arr, vy_nan_arr, units='dots', scale_units='dots', color = 'r', label = 'Interpolated')
+                plt.legend(loc = 'upper right', bbox_to_anchor=(0.1, 1.07), fontsize = 9, fancybox=True,framealpha=0.05)
         return
 
-    def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, title = None):
+    def __velocity_streamline_plotter(self, X, Y, VX, VY, i = 0, nan_mask = None, title = None):
         """
         Plot the velocity streamlines for a given frame.
         """
         unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
         if title is None:
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'for frame = {i}'
             else:
                 time_label = f'at time = {np.round(i * self.unit_conversion_dict["frame_interval_in_physical_units"],1)} {self.unit_conversion_dict["physical_time_unit_name"]}'
@@ -672,21 +765,37 @@ class CellSegmentationTracker:
         plt.xlabel(xlabel = rf'x ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.ylabel(ylabel = rf'y ({self.unit_conversion_dict["physical_length_unit_name"]})')
         plt.title(title)
+
+        if nan_mask is not None:
+            if nan_mask.sum() > 0:               
+                plt.plot(X[nan_mask], Y[nan_mask], 'rs', ms=1, label = 'Interpolated')
+                plt.legend(loc = 'upper right', bbox_to_anchor=(0.1, 1.07), fontsize = 9, fancybox=True,framealpha=0.05)            
         return
 
-    def __animate_flow_field(self, i, X, Y, arr, fig, fn,):
+    def __animate_flow_field(self, i, X, Y, arr, Nx, Ny, vx_idx, vy_idx, fig, fn, plot_interpolated_field, velocity_index = None):
         """
         Animate the flow field for a given frame. Used as a wrapper for the animator function.
         """
-
         # we want a fresh figure everytime
         fig.clf()
-        # add subplot, aka axis
+
+        # find frame mask
+        frame_mask = arr[:, 0] == i
+
+        #
+        grid_columns = self.grid_df.columns.to_list()
+        
         # load the frame
-        arr_vx = arr[arr[:, 0] == i][:, -2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-        arr_vy = arr[arr[:, 0] == i][:, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        arr_vx = arr[frame_mask, vx_idx].reshape(Ny, Nx)
+        arr_vy = arr[frame_mask, vy_idx].reshape(Ny, Nx)
+
+        if plot_interpolated_field:
+            nan_mask = np.isnan(arr[frame_mask, velocity_index]).reshape(Ny, Nx)
+        else:
+            nan_mask = None
+
         # call the global function
-        fn(X, Y, arr_vx, arr_vy, i=i)
+        fn(X, Y, arr_vx, arr_vy, i=i, nan_mask = nan_mask)
         return
         
     def __animator(self, arr, fn, rng, animate_wrapper = None, inter=200, show=True):
@@ -725,6 +834,65 @@ class CellSegmentationTracker:
             plt.show()
         return
 
+    def __save_grid_as_mat_file(self, name, x_increases_left_to_right = True):
+        """
+        Save grid dataframe as mat file.
+        """
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns = self.grid_df.columns.to_list()
+        grid_columns.remove('Ngrid')
+        grid_dict = {}
+
+        data= self.grid_df.loc[:, grid_columns].values
+
+        # Find number of grid squares in each dimension
+        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
+        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
+        Nsquares = Nx * Ny
+
+        # Extract grid centers
+        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
+        # Flip to get increasing y_values
+        y_center = np.flip(data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx), axis = 0)
+
+        if not x_increases_left_to_right:
+            x_center = x_center.T
+            y_center = y_center.T
+
+        # Add frame and time to grid dict
+        for key in ['Frame', 'T']:
+            grid_dict.update({key: self.grid_df[key].unique()})
+
+        # Add grid centers to grid dict
+        Nframes = len(grid_dict['Frame'])
+        X = np.zeros([Nframes, 1], dtype = object)
+        Y = np.zeros([Nframes, 1], dtype = object)
+        for i in np.arange(Nframes):
+            X[i, 0] = x_center
+            Y[i, 0] = y_center
+        grid_dict.update({'x_center': X, 'y_center': Y})
+
+        remaining_cols = grid_columns[grid_columns.index('cell_number'):]
+
+        # Add grid features to grid dict
+        cell_arr = np.zeros([Nframes, len(remaining_cols)], dtype = object)
+        for i in np.arange(Nframes):
+            frame_mask = data[:, grid_columns.index('Frame')] == i
+            for j, key in enumerate(remaining_cols):
+                if x_increases_left_to_right:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0)
+                else:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0).T
+
+        # update grid dict
+        for i, key in enumerate(remaining_cols):
+            grid_dict.update({key: np.expand_dims(cell_arr[:, i], axis = 1)})
+
+        # Save grid dict as mat file
+        filename = self.__generate_filename(name, append = '_grid_statistics.mat')
+        savemat(os.path.join(self.output_folder, filename), grid_dict)
+        print(f"Saved grid statistics as mat file to: {os.path.join(self.output_folder, filename)}")
+        return
     
     #### Public methods ####
 
@@ -819,49 +987,60 @@ class CellSegmentationTracker:
         """
         Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
 
+
         Parameters:
         -----------
-        calculate_velocities : (bool, default = True) - whether to calculate velocities from trackmate data and
+        calculate_velocities : (bool, default = True) - whether to calculate velocities from trackmate data and \
                                 include them in the spots csv file
+
         get_tracks : (bool, default = True) - whether to generate a dataframe with track features
+
         get_edges : (bool, default = True) - whether to generate a dataframe with edge features
+
         save_csv_files : (bool, default = True) - whether to save the csv files to the output folder
+
         name : (str, default = None) - name of csv files. If None, the name of the image file is used.
+
         Returns:
         --------
         spots_df : (pandas dataframe) - dataframe with spot features
+
         tracks_df : (pandas dataframe) - dataframe with track features if get_tracks = True, else None
+
         edges_df : (pandas dataframe) - dataframe with edge features if get_edges = True, else None
         """
 
-        if not self.xml_path.endswith(".xml"):
-            raise OSError("No or invalid xml file path provided!")
-        else:
-            print("\nStarting to generate csv files from xml file now. This may take a while... \
-                  \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
-            t1 = time.time()
-            self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
-                                                            get_track_features = get_tracks, get_edge_features = get_edges)
-            t2 = time.time()
-            print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
+        if not str(self.xml_path).endswith(".xml"):
+            try:
+                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            except:
+                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
 
-            # Convert length and time to physical units, if necessary
-            self.__unit_conversion()
-            if self.__convert_time_to_physical_units:
-                # Features to convert
-                time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
-                inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
-                                        'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
-                                        'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+        print("\nStarting to generate csv files from xml file now. This may take a while... \
+                \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
+        t1 = time.time()
+        self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
+                                                        get_track_features = get_tracks, get_edge_features = get_edges)
+        t2 = time.time()
+        print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
 
-                for df in [self.spots_df, self.tracks_df, self.edges_df]:
-                    for key in time_keys:
-                        if key in df.columns:
-                            df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
-                    for key in inverse_time_keys:
-                        if key in df.columns:
-                            df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
-                print("Time unit conversion done.\n")
+        # Convert length and time to physical units, if necessary
+        self.__unit_conversion()
+        if self.__convert_time_to_physical_units:
+            # Features to convert
+            time_keys = ['T', 'TRACK_DURATION', 'TRACK_START', 'TRACK_STOP', 'EDGE_TIME']
+            inverse_time_keys = ['Velocity_X', 'Velocity_Y', 'TRACK_MAX_SPEED', 'TRACK_MEAN_SPEED',\
+                                    'TRACK_MIN_SPEED', 'TRACK_MEDIAN_SPEED', 'TRACK_STD_SPEED', \
+                                    'MEAN_STRAIGHT_LINE_SPEED', 'DIRECTIONAL_CHANGE_RATE', 'SPEED']
+
+            for df in [self.spots_df, self.tracks_df, self.edges_df]:
+                for key in time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] * self.unit_conversion_dict['frame_interval_in_physical_units']
+                for key in inverse_time_keys:
+                    if key in df.columns:
+                        df[key] = df[key] / self.unit_conversion_dict['frame_interval_in_physical_units']
+            print("Time unit conversion done.\n")
         
         self.__Nspots = len(self.spots_df)
         self.__Ntracks = len(self.tracks_df)
@@ -889,7 +1068,14 @@ class CellSegmentationTracker:
         Print the settings used for cellpose segmentation and trackmate tracking, as well as some
         basic image information.
         """
+        if not str(self.xml_path).endswith(".xml"):
+            try:
+                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            except:
+                raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \
+                              or the image folder must contain a .xml file with the same name as the image file.")
 
+        
         root = et.fromstring(open(self.xml_path).read())
 
         im_settings = root.find('Settings').find('ImageData')
@@ -920,11 +1106,8 @@ class CellSegmentationTracker:
         print("\nSUMMARY STATISTICS FOR SPOTS: ")
         print("All lengths are in phyiscal units, if provided. Otherwise, they are in pixels.")
         print("All times are in physical units, if provided. Otherwise, they are in frames.\n")
-        if self.__Nspots is None:
-            self.__Nspots = len(self.spots_df)
-        print("Total no. of spots: ", self.__Nspots)
-        if self.__Nframes is None:
-            self.__Nframes = int(self.spots_df['Frame'].max() + 1)
+
+        self.__initialize_basic_attributes()
         print("Average no. of spots per frame: ", self.__Nspots / self.__Nframes)
      
         # Calculate average values of spot observables
@@ -957,13 +1140,14 @@ class CellSegmentationTracker:
         Parameters:
         -----------
         spot_feature : (str, default = 'Radius') - feature to plot over time
+
         feature_unit : (str, default = None) - unit of the feature to plot over time.
         """
 
         fig, ax = plt.subplots()
         ax.errorbar(self.spots_df.groupby('Frame')['T'].mean(),\
                     self.spots_df.groupby('T')[spot_feature].mean(), \
-                    self.spots_df.groupby('T')[spot_feature].std(ddof=1), fmt = 'k.',\
+                    self.spots_df.groupby('T')[spot_feature].std(ddof=1) / self.spots_df.groupby('T')['Frame'].count().values, fmt = 'k.',\
                           capsize = 5, capthick = 2, elinewidth = 2, ms = 5)
         ylabel = f'{spot_feature} ({feature_unit})' if feature_unit is not None else spot_feature
         ax.set(xlabel = f"Time ({self.unit_conversion_dict['physical_time_unit_name']})", ylabel = ylabel, title = 'Average ' + spot_feature + ' over time')
@@ -971,8 +1155,9 @@ class CellSegmentationTracker:
 
         return
 
-    def calculate_grid_statistics(self, Ngrid = None, include_features = [], \
-                               save_csv = True, name = None):
+    def calculate_grid_statistics(self, grid_boundaries = None, Ngrid = None, include_features = [], \
+                               interpolate_features = True, interpolation_method = 'cubic', save_csv = True,\
+                                save_mat_file = False, x_increases_left_to_right = True, name = None):
         """
         Calculates the mean value of a given feature in each grid square for each frame and returns a dataframe with the results. 
         As a minimum, the frame, time, grid center coordinates, the no. of cells in each grid, as well
@@ -981,18 +1166,37 @@ class CellSegmentationTracker:
 
         Parameters:
         ----------
+        grid_boundaries : (list of tuples, default = None) - list of tuples with the format [(x_min, x_max), (y_min, y_max)]. \
+                          Only cells within these boundaries are considered. If None, the boundaries are set to be the boundaries of the image.
+
         Ngrid : (int, default = None) - number of grid squares in the smallest dimension. \
-                The number of grid squares in the other dimension is determined by the aspect ratio of the image, 
-                with the restriction that the grid squares are square. If None, Ngrid is set to be
-                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly
+                The number of grid squares in the other dimension is determined by the aspect ratio of the image, \
+                with the restriction that the grid squares are square. If None, Ngrid is set to be \
+                the ratio between the smallest spatial dimension and twice the average cell diameter, yielding roughly \
                 4 cells per grid square.
-        include_features : (list of strings, default = []) - list of features to include in the grid dataframe, 
-                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, 
-                            mean_velocity_X and mean_velocity_Y.
-                            The possible feature keys are the columns of the spots dataframe generated 
+
+        include_features : (list of strings, default = []) - list of features to include in the grid dataframe, \
+                            in addition to the standard features: cell number (i.e. the no. of cells), number_density, \ 
+                            mean_velocity_X and mean_velocity_Y. \
+                            The possible feature keys are the columns of the spots dataframe generated \
                             by the function 'generate_csv_files'.
+
+        interpolate_features : (bool, default = True) - whether to interpolate nan values in the velocity and scalar fields. \
+                               If true, (and nans are present), the interpolated values are added to the grid dataframe as well.
+
+        interpolation_method : (string, default = 'cubic') - interpolation method to use to estimate nan values. \
+                               Possible values are 'linear', 'nearest' and 'cubic'. Nan values at points where 'linear' and 'cubic' are not \
+                               defined are estimated by 'nearest'.
+
         save_csv : (bool, default=True) - if True, the grid dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+
+        save_mat_file : (bool, default=False) - if True, the grid dataframe is saved as a mat (MATLAB) file, with each grid feature as a \
+                        separate cell array
+
+        x_increases_left_to_right : (bool, default = True) - whether the grid x-values should increase from left to right or top to bottom \
+                                   (and all other features accordingly) in the mat file. If False, the x-values increase from top to bottom.
+
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used. \
                It will be saved in the output_folder, if provided, otherwise in the image folder.
 
         Returns:
@@ -1002,7 +1206,6 @@ class CellSegmentationTracker:
 
         cols = ['Frame', 'X', 'Y', 'T', 'Velocity_X', 'Velocity_Y']
         add_to_grid = []
-        # Add additional features to grid (if any)
         for feature in include_features:
             if feature not in cols:
                 cols.append(feature)    
@@ -1014,42 +1217,70 @@ class CellSegmentationTracker:
         grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
         grid_columns.extend(add_to_grid)
 
+        # Initialize necessary variables
+        if grid_boundaries is None:
+            self.__initialize_basic_attributes()
+            Lx, Ly = self.__grid_dict['Lx'], self.__grid_dict['Ly']
+            xmin, xmax = self.__grid_dict['xmin'], self.__grid_dict['xmax']
+            ymin, ymax = self.__grid_dict['ymin'], self.__grid_dict['ymax']
+        else:
+            Lx = grid_boundaries[0][1] - grid_boundaries[0][0]
+            Ly = grid_boundaries[1][1] - grid_boundaries[1][0]
+            xmin, xmax = grid_boundaries[0][0], grid_boundaries[0][1]
+            ymin, ymax = grid_boundaries[1][0], grid_boundaries[1][1]
+  
         av_diameter = 2 * self.spots_df['Radius'].mean()
-        Lx = self.spots_df['X'].max() - self.spots_df['X'].min()
-        Ly = self.spots_df['Y'].max() - self.spots_df['Y'].min()
-
-        # Print information about the length scales
-        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
-        print("Image size: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
-        
         # Set Ngrid to be the ratio between the smallest spatial dimension and twice the average cell diameter, if not provided
-        if Ngrid is None:
+        if Ngrid is None: 
             Ngrid = int(np.ceil(min([Lx, Ly]) / (2 * av_diameter))) if Ngrid is None else Ngrid
-            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial\n\
-dimension and twice the average cell diameter: ", Ngrid)
-            
+            print("\nNgrid is not provided. Setting Ngrid to be the ratio between the smallest spatial \
+                  dimension and twice the average cell diameter: ", Ngrid)
+
         # Initialize grid dictionary
         self.__initialize_grid(Ngrid)
 
+        # Set remaining grid variables
+        if grid_boundaries is None:
+            grid_len = self.__grid_dict['grid_len']
+            Nsquares = self.__grid_dict['Nsquares']
+            Nx, Ny = self.__grid_dict['Nx'], self.__grid_dict['Ny']
+        else:
+            if Lx > Ly:
+                grid_len = Ly / Ngrid
+                residual_x = Lx % grid_len
+                xmin, xmax = xmin + residual_x / 2, xmax - residual_x / 2
+                Nx, Ny = int(np.floor(Ngrid * Lx / Ly)), Ngrid
+                Nsquares = Nx * Ny
+            elif Lx <= Ly:
+                grid_len = Lx / Ngrid
+                residual_y = Ly % grid_len
+                ymin, ymax = ymin + residual_y / 2, ymax - residual_y / 2
+                Nx, Ny = Ngrid, int(np.floor(Ngrid * Ly / Lx))
+                Nsquares = Nx * Ny
+
+        # Print information about the length scales
+        print("\nAverage cell diameter: ", av_diameter, " ", rf'{self.unit_conversion_dict["physical_length_unit_name"]}')
+        print("Dimensions of region to be gritted: ", Lx, " x ", Ly, " ", rf"{self.unit_conversion_dict['physical_length_unit_name']}$^2$")
+        
         # Initialize grid array
-        grid_arr = np.ones([self.__Nframes * self.__grid_dict['Nsquares'], len(grid_columns)])
+        grid_arr = np.ones([self.__Nframes * Nsquares, len(grid_columns)])
 
         # Loop over all frames
         for i, frame in enumerate(np.arange(self.__Nframes)):
-            # Extract data for given frame
             arr_T = data[data[:, 0] == frame]
             time = arr_T[0, 3]
             Ngrid_count = 0
-            for y in np.linspace(self.__grid_dict['ymax'] - self.__grid_dict['grid_len'], self.__grid_dict['ymin'], self.__grid_dict['Ny']):
-                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + self.__grid_dict['grid_len'])
+            for y in np.linspace(ymax - grid_len, ymin, Ny):
+                mask = (arr_T[:, 2] >= y) & (arr_T[:, 2] < y + grid_len)
                 arr_Y = arr_T[mask]
-                for x in np.linspace(self.__grid_dict['xmin'], self.__grid_dict['xmax'] - self.__grid_dict['grid_len'], self.__grid_dict['Nx']):
-                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + self.__grid_dict['grid_len'])
+                for x in np.linspace(xmin, xmax - grid_len, Nx):
+                    mask = (arr_Y[:, 1] >= x) & (arr_Y[:, 1] < x + grid_len)
             
+                    # If no cells in grid, set all values except for cell_number to nan
                     if mask.sum() == 0:
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:7] = \
-                            [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, y + self.__grid_dict['grid_len'] / 2, 0, 0]
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:7] = \
+                            [frame, time, Ngrid_count, x + grid_len / 2, y + grid_len / 2, 0, np.nan]
+                        grid_arr[frame * Nsquares + Ngrid_count, 7:] = np.nan * np.zeros(len(grid_columns) - 7)
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -1058,20 +1289,39 @@ dimension and twice the average cell diameter: ", Ngrid)
 
                         # If true, return the number of cells in each grid as opposed to the density
                         cell_number = mask.sum() 
-                        density = cell_number / (self.__grid_dict['grid_len']**2)     
+                        density = cell_number / (grid_len**2)     
 
-                        grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + self.__grid_dict['grid_len'] / 2, \
-                                                                y + self.__grid_dict['grid_len'] / 2, cell_number, density, vx, vy]
+                        grid_arr[frame * Nsquares + Ngrid_count, 0:9] = [frame, time, Ngrid_count, x + grid_len / 2, \
+                                                                y + grid_len / 2, cell_number, density, vx, vy]
                         # Add additional features to grid (if any)
                         for j, feature in enumerate(add_to_grid):
-                            grid_arr[frame * self.__grid_dict['Nsquares'] + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
+                            grid_arr[frame * Nsquares + Ngrid_count, 9 + j] = np.nanmean(arr_Y[mask, 6 + j])
 
                     Ngrid_count += 1
 
         self.grid_df = pd.DataFrame(grid_arr, columns = grid_columns)
-        
+
+        if interpolate_features:
+            # Interpolate features if there are nan values(interpolated velocities will be saved as new columns)
+            feature_list = add_to_grid
+            for feature in feature_list:
+                if not np.isnan(self.grid_df[feature]).any():
+                    feature_list.remove(feature)       
+            if np.isnan(self.grid_df['mean_velocity_X']).any():
+                feature_list = ['mean_velocity_X', 'mean_velocity_Y'] + feature_list
+            if np.isnan(self.grid_df['number_density']).any():
+                feature_list = ['number_density'] + feature_list
+
+            if len(feature_list) > 0:
+                print("\nInterpolating features...")
+                self.__interpolate_grid_features(feature_list,\
+                                                  interpolation_method = interpolation_method)
+
         # Print average number of cells per grid
         print("\nAverage no. of cells per grid: ", np.round(self.grid_df['cell_number'].mean(),2))
+
+        if save_mat_file:
+            self.__save_grid_as_mat_file(name, x_increases_left_to_right = x_increases_left_to_right)
 
         if save_csv:
             name = self.__generate_filename(name, append = '_grid_statistics.csv')
@@ -1090,17 +1340,26 @@ dimension and twice the average cell diameter: ", Ngrid)
         -----------
         feature : (string, default = 'number_density') - feature to visualize. Must be a column of the grid dataframe \
                   generated by the method calculate_grid_statistics.
+
         feature_unit : (string, default = None) - unit of the feature to visualize. If None, no unit is displayed.
-        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
+
+        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not. \
                       If [0,0], all frames are visualized.
-        calculate_average : (bool, default=False) - if True, the average heatmap over the given frame range 
+
+        calculate_average : (bool, default=False) - if True, the average heatmap over the given frame range  \
                             is calculated and visualized.
-        animate : (bool, default=True) - if True, the heatmap is animated over the given frame range.
+
+        animate : (bool, default=True) - if True, the heatmap is animated over the given frame range. 
+
         frame_interval : (int, default=1200) - time between frames in ms (for the animation).
+
         show : (bool, default=True) - if True, the heatmap is shown.
 
         """
   
+        # Ensure validity of unit_conversion_dict
+        self.__ensure_conversion_dict_validity()
+
         if feature not in self.grid_df.columns and feature not in self.spots_df.columns:
             print("\n Feature not in grid dataframe! Please specify a feature that is in the grid dataframe generated by the method calculate_grid_statistics.\n \
             These features are: \n", self.grid_df.columns, "\n")
@@ -1108,31 +1367,37 @@ dimension and twice the average cell diameter: ", Ngrid)
             if feature in self.spots_df.columns:
                 feature = 'mean_' + feature.lower()
 
-            # Set frame range
             Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
             frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
             # Set colorbar limits
             vmin, vmax = self.grid_df[feature].min(), self.grid_df[feature].max()
 
-            # Extract relevant data from dataframe as array
             if self.grid_df is not None:
                 data = self.grid_df.loc[:, ['Frame', 'T', 'Ngrid', feature]].values
-                data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'],:]
+
+                Nx = len(self.grid_df['x_center'].unique())
+                Ny = len(self.grid_df['y_center'].unique())
+                Nsquares = Nx * Ny
+
+                data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares,:]
             else: 
-                raise OSError("No grid dataframe provided! You must first run the function 'calculate_grid_statistics'.")
+                print("No grid dataframe provided! To use visualize_grid_statistics, you must first run the function 'calculate_grid_statistics'.")
+                return
 
             if calculate_average:
-                arr_T = data[:,-1].reshape(Nframes, self.__grid_dict['Nsquares'])
+                arr_T = data[:,-1].reshape(Nframes, Nsquares)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     arr_T = np.nanmean(arr_T, axis = 0)
         
-                if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+                if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                     time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
                 else:
                     t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                     t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                     time_label = rf'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
+
+
                     title=rf'{self.__generate_title(feature, feature_unit)} heatmap {time_label}'
                     self.__heatmap_plotter(0, arr_T, feature, vmin, vmax, title=title)
             else:             
@@ -1149,22 +1414,32 @@ dimension and twice the average cell diameter: ", Ngrid)
         return
 
     def plot_velocity_field(self, mode = 'field', frame_range = [0,0], calculate_average = False, \
-                                animate = True, frame_interval = 1200, show = True):
+                                animate = True, frame_interval = 1200, use_interpolated_velocities = True, show = True):
         """
         Plot or animate the velocity field for a given frame range.
 
         Parameters:
         -----------
-        mode : (string, default = 'field_lines') - mode of visualization. Can be 'field' or 'streamlines'
+        mode : (string, default = 'field') - mode of visualization. Can be 'field' or 'streamlines'
+
         frame_range : (list of ints, default=[0,0] - range of frames to visualize. Left endpoint is included, \
                       right endpoint is not. If [0,0], all frames are visualized.
-        calculate_average : (bool, default=False) - if True, the average velocity field over the given
+
+        calculate_average : (bool, default=False) - if True, the average velocity field over the given \
                             frame range is calculated and visualized.
+
         animate : (bool, default=True) - if True, the velocity field is animated over the given frame range.
+
         frame_interval : (int, default=1200) - time between frames in ms (for the animation).
+
+        use_interpolated_velocities : (bool, default=True) - if True, the interpolated velocities are used, if available.
+
         show : (bool, default=True) - if True, the velocity field is shown.
-    
         """
+
+        # Ensure validity of unit_conversion_dict
+        self.__ensure_conversion_dict_validity()
+
         if self.__Nframes == 1:
             print("\nOnly one frame in the image! Velocity is undefined.\n")
             return
@@ -1176,46 +1451,71 @@ dimension and twice the average cell diameter: ", Ngrid)
         else:
             plotter = self.__velocity_field_plotter
 
-    
         Nframes = self.__Nframes if frame_range == [0,0] else frame_range[1] - frame_range[0]
         frame_range[1] = frame_range[1] if frame_range[1] != 0 else Nframes
 
-        data= self.grid_df.loc[:, ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y']].values
-        data = data[frame_range[0] * self.__grid_dict['Nsquares']:frame_range[1] * self.__grid_dict['Nsquares'], :]
+        # Check if interpolated velocities are available
+        use_interpolated_velocities = use_interpolated_velocities if 'interp_velocity_X' in self.grid_df.columns else False
 
-        x_center = data[:self.__grid_dict['Nsquares'], 2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-        y_center = data[:self.__grid_dict['Nsquares'], 3].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+        # Extract relevant data from dataframe as array
+        grid_columns = ['Frame', 'T', 'x_center', 'y_center', 'mean_velocity_X', 'mean_velocity_Y',]
+        if use_interpolated_velocities:
+            grid_columns.extend(['interp_velocity_X', 'interp_velocity_Y'])
+        data= self.grid_df.loc[:, grid_columns].values
 
+        # Find number of grid squares in each dimension
+        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
+        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
+        Nsquares = Nx * Ny
 
+        # Extract data in the wanted frame range
+        data = data[frame_range[0] * Nsquares:frame_range[1] * Nsquares, :]
+   
+        # Extract grid centers
+        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
+        y_center = data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx)
+
+        # Define velocity indices based on whether interpolated velocities are used or not
+        if use_interpolated_velocities:
+            vx_idx, vy_idx = grid_columns.index('interp_velocity_X'), grid_columns.index('interp_velocity_Y')
+        else:
+            vx_idx, vy_idx = grid_columns.index('mean_velocity_X'), grid_columns.index('mean_velocity_Y')
+        
         if calculate_average:
-            arr_vx = data[:, -2].reshape(Nframes, self.__grid_dict['Nsquares'])
-            arr_vy = data[:, -1].reshape(Nframes, self.__grid_dict['Nsquares'])
+            arr_vx = data[:, vx_idx].reshape(Nframes, Nsquares)
+            arr_vy = data[:, vy_idx].reshape(Nframes, Nsquares)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                arr_vx = np.nanmean(arr_vx, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                arr_vy = np.nanmean(arr_vy, axis = 0).reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
+                arr_vx = np.nanmean(arr_vx, axis = 0).reshape(Ny, Nx)
+                arr_vy = np.nanmean(arr_vy, axis = 0).reshape(Ny, Nx)
 
             unit = rf'({self.unit_conversion_dict["physical_length_unit_name"]}/{self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 time_label = f'av. over frames {frame_range[0]}:{frame_range[1]}'
             else:
                 t_start = np.round(frame_range[0] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                 t_end = np.round(frame_range[1] * self.unit_conversion_dict["frame_interval_in_physical_units"], 1)
                 time_label = f'av. from {t_start}:{t_end} {self.unit_conversion_dict["physical_time_unit_name"]}'
             title = rf'Velocity field {unit} {time_label}'
-            plotter(x_center, y_center, arr_vx, arr_vy, \
-                                title=title)         
+            plotter(x_center, y_center, arr_vx, arr_vy, title=title)         
         else:  
             if animate:
-                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, fig, plotter,)
+                anim_wrapper = lambda i, frame, fig, fn: self.__animate_flow_field(i, x_center, y_center, data, Nx, Ny, vx_idx, vy_idx,\
+                                                             fig, plotter,plot_interpolated_field=use_interpolated_velocities, velocity_index = grid_columns.index('mean_velocity_X'))
                 self.__animator(data, plotter, (frame_range[0],frame_range[1]), anim_wrapper, inter=frame_interval, show=show)
             else:
                 for i in range(frame_range[0], frame_range[1]):
                     fig, ax = plt.subplots()
-                    arr_vx = data[data[:, 0] == i,-2].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                    arr_vy = data[data[:, 0] == i, -1].reshape(self.__grid_dict['Ny'], self.__grid_dict['Nx'])
-                    plotter(x_center, y_center, arr_vx, arr_vy, i=i)
+                    frame_mask = (data[:, 0] == i)
+                    arr_vx = data[frame_mask, vx_idx].reshape(Ny, Nx)
+                    arr_vy = data[frame_mask, vy_idx].reshape(Ny, Nx)
+    
+                    if use_interpolated_velocities:
+                        nan_mask = np.isnan(data[frame_mask, grid_columns.index('mean_velocity_X')]).reshape(Ny, Nx)
+                    else:
+                        nan_mask = None
+                    plotter(x_center, y_center, arr_vx, arr_vy, i=i, nan_mask=nan_mask,)
         if show:
             plt.show()
         return
@@ -1231,13 +1531,18 @@ dimension and twice the average cell diameter: ", Ngrid)
         -----------
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
                              If None, the maximum frame interval is set to the number of frames - 1.
-        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
-        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
-                It will be saved in the output_folder, if provided, otherwise in the image folder.
-        plot : (bool, default = True) - if True, the MSD is plotted.
-        show : (bool, default = True) - if True, the plot is shown.
 
+        Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the MSD.
+
+        save_csv : (bool, default=True) - if True, the MSD dataframe is saved as a csv file.
+
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used. \
+                It will be saved in the output_folder, if provided, otherwise in the image folder.
+
+        plot : (bool, default = True) - if True, the MSD is plotted.
+
+        show : (bool, default = True) - if True, the plot is shown.
+        
         Returns:
         --------
         msd_df : pandas dataframe - dataframe containing the MSD for each frame interval up to the maximum frame interval.
@@ -1290,7 +1595,7 @@ dimension and twice the average cell diameter: ", Ngrid)
             fig, ax = plt.subplots()
             ax.errorbar(msd_df['time_interval'], msd_df['msd'], msd_df['msd_std'], fmt = 'k.',\
                             capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 xlabel = 'Frame interval'
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
@@ -1312,11 +1617,16 @@ dimension and twice the average cell diameter: ", Ngrid)
         N_neighbors : (int, default = 5) - number of nearest neighbors to consider when calculating the CRMSD.
         max_frame_interval : (int, default = None) - maximum frame interval to calculate the MSD for. \
                              If None, the maximum frame interval is set to the number of frames - 1.
+
         Ndof : (int, default = 1) - number of degrees of freedom used to calculate the standard deviation on the CRMSD.
+
         save_csv : (bool, default=True) - if True, the CRMSD dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used. \
                 It will be saved in the output_folder, if provided, otherwise in the image folder.
+
         plot : (bool, default = True) - if True, the CRMSD is plotted.
+
         show : (bool, default = True) - if True, the plot is shown.
 
         Returns:
@@ -1431,12 +1741,12 @@ dimension and twice the average cell diameter: ", Ngrid)
             fig, ax = plt.subplots()
             ax.errorbar(msd_df['time_interval'], msd_df['crmsd'], msd_df['crmsd_std'], fmt = 'k.',\
                             capsize = 2, capthick = 1.5, elinewidth = 1.5, ms = 5)
-            if self.unit_conversion_dict['physical_time_unit_name'] == 'Frame':
+            if self.unit_conversion_dict['physical_time_unit_name'] == 'frame':
                 xlabel = 'Frame interval'
             else:
                 xlabel = rf'Time interval ({self.unit_conversion_dict["physical_time_unit_name"]})'
 
-            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = 'Cage relative MSD')
+            ax.set(xlabel = xlabel, ylabel = rf"CRMSD ({self.unit_conversion_dict['physical_length_unit_name']}$^2$)", title = f'Cage relative MSD for {N_neighbors} neighbors')
             if show:
                 plt.show()
 
@@ -1457,11 +1767,17 @@ dimension and twice the average cell diameter: ", Ngrid)
         Parameters:
         -----------
         points_arr : (numpy array) - Array of points in 2D plane
+
         window_sizes : (numpy array or list) - Array of window sizes (i.e. radii) for which to calculate density fluctuations
+
         N_center_points : (int) - Number of center points to use for each window size. If None, all points are used.
+
         Ndof : (int) - Number of degrees of freedom to use for variance calculation
+
         x_boundaries : (list) - List of x boundaries with the format [x_min, x_max]. If None, no boundaries are used.
+
         y_boundaries : (list) - List of y boundaries with the format [y_min, y_max]. If None, no boundaries are used.
+
         normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
 
         Returns:
@@ -1543,24 +1859,34 @@ dimension and twice the average cell diameter: ", Ngrid)
 
         Parameters:
         -----------
-        window_sizes : (numpy array or list, default = None) - Array of window sizes (i.e. radii) for which to calculate density fluctuations.
+        window_sizes : (numpy array or list, default = None) - Array of window sizes (i.e. radii) for which to calculate density fluctuations.\
                      If None, the window sizes are calculated from min_max_window_size_fractions and Nwindows.
-        N_center_points : (int, default = None) - Number of center points to use for each window size. If None, all points are used. 
+
+        N_center_points : (int, default = None) - Number of center points to use for each window size. If None, all points are used. \
                           If window_sizes is provided, this parameter is ignored.
-        Nwindows : (int, default = 10) - Number of windows to calculate density fluctuations for. If window_sizes is provided, this parameter is ignored.
-        min_max_window_size_fractions : (list, default = [0.05,0.25]) - List of minimum and maximum window size fractions with the format [min, max].
-                                        These fractions are multiplied with the smallest dimension of the image to obtain the minimum and maximum window sizes.
+
+        Nwindows : (int, default = 10) - Number of windows to calculate density fluctuations for. If window_sizes is provided, this parameter is ignored. 
+
+        min_max_window_size_fractions : (list, default = [0.05,0.25]) - List of minimum and maximum window size fractions with the format [min, max].\
+                                        These fractions are multiplied with the smallest dimension of the image to obtain the minimum and maximum window sizes.\
                                         If window_sizes is provided, this parameter is ignored.
-        use_logscale : (bool, default = False) - If True, the window sizes are distributed logarithmically between the minimum and maximum window size.
+
+        use_logscale : (bool, default = False) - If True, the window sizes are distributed logarithmically between the minimum and maximum window size.\
                        This parameter is ignored if window_sizes is provided.
-        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not.
+
+        frame_range : (list of ints, default=[0,0]) - range of frames to visualize. Left endpoint is included, right endpoint is not. \
                       If [0,0], all frames are visualized.
-        Ndof : (int) - Number of degrees of freedom to use for variance calculation
-        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system.
+
+        Ndof : (int) - Number of degrees of freedom to use for variance calculation 
+
+        normalize : (bool) - If True, the density fluctuations are normalized by the square of the average density of the system. 
         save_csv : (bool, default=True) - if True, the density fluctuation dataframe is saved as a csv file.
-        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used.
+
+        name : (string, default = None) - name of the csv file to be saved. If None, the name of the image file is used. \
                 It will be saved in the output_folder, if provided, otherwise in the image folder.
+
         plot : (bool, default = True) - if True, the number variance is plotted.
+
         show : (bool, default = True) - if True, the plot is shown.
 
         Returns: 
@@ -1654,6 +1980,13 @@ dimension and twice the average cell diameter: ", Ngrid)
         # Store density fluctuation dataframe as attribute and return
         self.density_fluctuations_df = fluc_df
         return fluc_df
+  
+
+
+##  NOGET MED: 
+# samle alle dens_fluc i et df
+# regne eksponenter for alle frames
+# mulighed for at plotte
 
 # handle the normalize stuff ift returns, plots, units + forefaldende. måske bare smide dem i csv no matter?
 # test, also fro 1 frame
@@ -1716,8 +2049,10 @@ def main():
     df2 = df1.loc[df1['TRACK_ID'] < 100]
 
     cst.spots_df = df1
+  
     print(cst.spots_df.head())
 
+    cst.func_patriz(other_stuff = None)
     crmsd = cst.calculate_crmsd(N_neighbors = 15, max_frame_interval = None, \
                                     Ndof = 0, save_csv = True, name = None,  plot = True, show = True)
     

@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 from matplotlib import rcParams
 
-from cellsegmentationtracker import CellSegmentationTracker
+from CellSegmentationTracker_dev import CellSegmentationTracker
 
 
 d = {'figure.figsize': (6,6)}
@@ -42,6 +42,8 @@ cellpose_python_filepath = \
 image_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.tif"
 
 
+print(im_list)
+
 # Set whether to use a pretrained model or not. If not, you need to provide the path
 #  to a custom model
 use_model = 'EPI6000'
@@ -66,8 +68,8 @@ cellpose_dict = {
 # the calculated velocities might be incorrect, as several cells will be merged into
 #  one track and can be present at the same time
 trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
-                                        'GAP_CLOSING_MAX_DISTANCE': 15.0,
-                                        'MAX_FRAME_GAP': 2,
+                                        'GAP_CLOSING_MAX_DISTANCE': 30.0,
+                                        'MAX_FRAME_GAP': 3,
                                         'ALLOW_TRACK_SPLITTING': False, 
                                         'ALLOW_TRACK_MERGING': False,
                                         'ALLOW_GAP_CLOSING': True
@@ -76,24 +78,24 @@ trackmate_dict = {'LINKING_MAX_DISTANCE': 15.0,
 # Now having set all parameters, we are ready to initialise the CellSegmentationTracker
 #  object:
 if 0:
-  xml_path=im_list[1].strip('.tif') + '.xml'
+
   cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
-      cellpose_python_filepath = cellpose_python_filepath, xml_path=xml_path, output_folder_path=output_folder, \
+      cellpose_python_filepath = cellpose_python_filepath, image_folder_path=image_path, output_folder_path=output_folder, \
         use_model = use_model, custom_model_path = custom_model_path,\
         show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
           trackmate_dict = trackmate_dict,)
 
-cst.generate_csv_files()
+  cst.run_segmentation_tracking()
 if 1:
   for im_path in [im_list[2]]:
-      cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
-      cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
-        use_model = use_model, custom_model_path = custom_model_path,\
-        show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
-          trackmate_dict = trackmate_dict,)
-      
-      cst.run_segmentation_tracking()
+    cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
+    cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
+      use_model = use_model, custom_model_path = custom_model_path,\
+      show_segmentation = show_segmentation, cellpose_dict = cellpose_dict, \
+        trackmate_dict = trackmate_dict,)
+    
+    cst.run_segmentation_tracking()
 
-      df_spots, df_tracks, df_edges = \
-      cst.generate_csv_files()
+    df_spots, df_tracks, df_edges = \
+    cst.generate_csv_files()
 
