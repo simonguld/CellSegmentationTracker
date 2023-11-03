@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 from matplotlib import rcParams
 
-from CellSegmentationTracker_dev import CellSegmentationTracker
+from cellsegmentationtracker import CellSegmentationTracker
 
 
 d = {'figure.figsize': (6,6)}
@@ -39,9 +39,9 @@ imj_path = "C:\\Users\\Simon Andersen\\Fiji.app\\ImageJ-win64.exe"
 cellpose_python_filepath = \
   'C:\\Users\\Simon Andersen\\miniconda3\\envs\\cellpose\\python.exe'
 
-image_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.tif"
+image_path = os.path.join(img_folder, 'pre_post_merged.tif')
 
-
+print(image_path, os.path.isfile(image_path))
 print(im_list)
 
 # Set whether to use a pretrained model or not. If not, you need to provide the path
@@ -87,7 +87,7 @@ if 0:
 
   cst.run_segmentation_tracking()
 if 1:
-  for im_path in [im_list[2]]:
+  for im_path in [image_path]:
     cst = CellSegmentationTracker(cellpose_folder_path, imagej_filepath = imj_path, \
     cellpose_python_filepath = cellpose_python_filepath, image_folder_path = im_path, \
       use_model = use_model, custom_model_path = custom_model_path,\

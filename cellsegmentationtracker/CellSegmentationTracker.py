@@ -85,7 +85,7 @@ class CellSegmentationTracker:
     custom_model_path: (str, default=None) - If a custom Cellpose model is to be used, provide the path to the model here.
 
     show_segmentation (bool, default=True) - Determines whether to open Fiji and display the segmentation results  \
-      interactively during processing. If True, Fiji must be closed before the script can continue.
+      interactively during processing. If True, Fiji must be closed before the script can continue. The overlays will be saved as .avi file in the image folder
 
     cellpose_dict:  (dict, default=dict()) - A dictionary containing additional parameters to pass to the Cellpose 
                     segmentation algorithm:
@@ -315,10 +315,10 @@ class CellSegmentationTracker:
 
         if name is None:
             try:
-                name = os.path.basename(self.__img_path).strip(".tif")
+                name = os.path.splitext(os.path.basename(self.__img_path))[0]
             except:
                 try:
-                    name = os.path.basename(self.xml_path).strip(".xml")
+                    name = os.path.splitext(os.path.basename(self.xml_path))[0]
                 except:
                     name = 'CellSegmentationTracker'
             name = name + append if append is not None else name
@@ -454,7 +454,7 @@ class CellSegmentationTracker:
                 KeyboardInterrupt
                 sys.exit(0)
         else:
-            self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
         
             # To run headlessly, call jython script as a subprocess
             pipe = Popen([executable,'--ij2','--headless', '--run', f"{jython_path}"], stdout=PIPE)
@@ -924,8 +924,8 @@ class CellSegmentationTracker:
         self.__prepare_images()
 
         # Ensure that xml file has not already been created
-        if os.path.isfile(self.__img_path.strip(".tif") + ".xml"):
-            print("Skipping segmentation and tracking, as xml file already exits at: ", self.__img_path.strip(".tif") + ".xml")
+        if os.path.isfile(os.path.splitext(self.__img_path)[0] + ".xml"):
+            print("Skipping segmentation and tracking, as xml file already exits at: ", os.path.splitext(self.__img_path)[0] + ".xml")
         else:
             # Generate dictionary for jython script
             self.__generate_jython_dict()
@@ -953,11 +953,11 @@ class CellSegmentationTracker:
                         np.array([0.4, 0.0]))
             
         # Set xml path to image path
-        self.xml_path = self.__img_path.strip(".tif") + ".xml"
+        self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
         return
 
     def generate_csv_files(self, calculate_velocities = True, get_tracks = True, \
-                           get_edges = True, save_csv_files = True, name = None):
+                           get_edges = True, get_rois = False, save_csv_files = True, name = None):
         """
         Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
 
@@ -970,6 +970,9 @@ class CellSegmentationTracker:
         get_tracks : (bool, default = True) - whether to generate a dataframe with track features
 
         get_edges : (bool, default = True) - whether to generate a dataframe with edge features
+
+        get_rois : (bool, default = False) - whether to add a column to the spots dataframe with the ROI coordinates of each spot. \
+            The ROIs outline the cell mask. Adding them takes up a lot of memory. The ROI feature is a list with the format [(x1,y1), (x2,y2), ...].
 
         save_csv_files : (bool, default = True) - whether to save the csv files to the output folder
 
@@ -986,7 +989,7 @@ class CellSegmentationTracker:
 
         if not str(self.xml_path).endswith(".xml"):
             try:
-                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+                self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
             except:
                 raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
 
@@ -994,7 +997,7 @@ class CellSegmentationTracker:
                 \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
         t1 = time.time()
         self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
-                                                        get_track_features = get_tracks, get_edge_features = get_edges)
+                                                        get_track_features = get_tracks, get_edge_features = get_edges, get_rois = get_rois)
         t2 = time.time()
         print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
 
@@ -1044,7 +1047,7 @@ class CellSegmentationTracker:
         """
         if not str(self.xml_path).endswith(".xml"):
             try:
-                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+                self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
             except:
                 raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \
                               or the image folder must contain a .xml file with the same name as the image file.")
@@ -1075,7 +1078,7 @@ class CellSegmentationTracker:
         """
 
         spots_exclude_list = ['Frame', 'Z', 'Manual spot color', 'Ellipse center x0', 'Ellipse center y0',\
-                              'Shape index', 'Spot ID', 'TRACK_ID']
+                              'Shape index', 'Spot ID', 'TRACK_ID', 'ROI']
    
         print("\nSUMMARY STATISTICS FOR SPOTS: ")
         print("All lengths are in phyiscal units, if provided. Otherwise, they are in pixels.")

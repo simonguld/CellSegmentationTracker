@@ -29,8 +29,10 @@ from ij import IJ
 
 
 from datetime import datetime as dt
-import sys, os
+import sys
+import os
 import json 
+import time
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
@@ -49,10 +51,11 @@ image_path = param_dict['IMG_PATH']
 cellpose_python_filepath = param_dict['CELLPOSE_PYTHON_FILEPATH']
 output_path = param_dict['OUTPUT_PATH']
 
+base_path = os.path.splitext(image_path)[0]
+overlay_path = base_path + '_overlays.avi'
+
 cellpose_dict = param_dict['CELLPOSE_DICT']
 trackmate_dict = param_dict['TRACKMATE_DICT']
-
-
 
 
 # Shall we display the results each time?
@@ -160,9 +163,23 @@ if show_output:
     displayer =  HyperStackDisplayer( model, selectionModel, imp, ds )
     displayer.render()
     displayer.refresh()
+    time.sleep(2)
+
+    # capture overlay - RGB file
+    image = trackmate.getSettings().imp
+    capture = CaptureOverlayAction.capture(image, -1, imp.getNFrames(), logger)
+    capture.setTitle("TracksOverlay")
+    IJ.save(capture, overlay_path)
+    capture.show()
+
+    
+
+    
 
 print("Tracking and segmentation completed.")
 
+
+        
 ## Generate txt file confirming that the analysis is completed.
 with open(os.path.join(class_path, 'cst_analysis_completed.txt'), 'w') as file:
         file.write('Analysis completed')

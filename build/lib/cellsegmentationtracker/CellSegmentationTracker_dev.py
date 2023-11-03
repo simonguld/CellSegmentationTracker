@@ -69,6 +69,7 @@ np.set_printoptions(precision = 10, suppress=1e-14)
 # make roubst under other image formats?
 # make robust under color, multichannel etc?
 
+
 class CellSegmentationTracker:
 
     """
@@ -342,10 +343,10 @@ class CellSegmentationTracker:
 
         if name is None:
             try:
-                name = os.path.basename(self.__img_path).strip(".tif")
+                name = os.path.splitext(os.path.basename(self.__img_path))[0]
             except:
                 try:
-                    name = os.path.basename(self.xml_path).strip(".xml")
+                    name = os.path.splitext(os.path.basename(self.xml_path))[0]
                 except:
                     name = 'CellSegmentationTracker'
             name = name + append if append is not None else name
@@ -481,7 +482,7 @@ class CellSegmentationTracker:
                 KeyboardInterrupt
                 sys.exit(0)
         else:
-            self.xml_path = self.__img_path.strip(".tif") + ".xml"
+            self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
         
             # To run headlessly, call jython script as a subprocess
             pipe = Popen([executable,'--ij2','--headless', '--run', f"{jython_path}"], stdout=PIPE)
@@ -575,6 +576,66 @@ class CellSegmentationTracker:
             print("Saved edges csv file to: ", path_out_edges)
         return
 
+    def __save_grid_as_mat_file(self, name, x_increases_left_to_right = True):
+        """
+        Save grid dataframe as mat file.
+        """
+        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
+        grid_columns = self.grid_df.columns.to_list()
+        grid_columns.remove('Ngrid')
+        grid_dict = {}
+
+        data= self.grid_df.loc[:, grid_columns].values
+
+        # Find number of grid squares in each dimension
+        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
+        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
+        Nsquares = Nx * Ny
+
+        # Extract grid centers
+        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
+        # Flip to get increasing y_values
+        y_center = np.flip(data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx), axis = 0)
+
+        if not x_increases_left_to_right:
+            x_center = x_center.T
+            y_center = y_center.T
+
+        # Add frame and time to grid dict
+        for key in ['Frame', 'T']:
+            grid_dict.update({key: self.grid_df[key].unique()})
+
+        # Add grid centers to grid dict
+        Nframes = len(grid_dict['Frame'])
+        X = np.zeros([Nframes, 1], dtype = object)
+        Y = np.zeros([Nframes, 1], dtype = object)
+        for i in np.arange(Nframes):
+            X[i, 0] = x_center
+            Y[i, 0] = y_center
+        grid_dict.update({'x_center': X, 'y_center': Y})
+
+        remaining_cols = grid_columns[grid_columns.index('cell_number'):]
+
+        # Add grid features to grid dict
+        cell_arr = np.zeros([Nframes, len(remaining_cols)], dtype = object)
+        for i in np.arange(Nframes):
+            frame_mask = data[:, grid_columns.index('Frame')] == i
+            for j, key in enumerate(remaining_cols):
+                if x_increases_left_to_right:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0)
+                else:
+                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0).T
+
+        # update grid dict
+        for i, key in enumerate(remaining_cols):
+            grid_dict.update({key: np.expand_dims(cell_arr[:, i], axis = 1)})
+
+        # Save grid dict as mat file
+        filename = self.__generate_filename(name, append = '_grid_statistics.mat')
+        savemat(os.path.join(self.output_folder, filename), grid_dict)
+        print(f"Saved grid statistics as mat file to: {os.path.join(self.output_folder, filename)}")
+        return
+    
     def __initialize_basic_attributes(self):
         """
         Initialize basic attributes like Nframes, Nspots etc.
@@ -834,65 +895,6 @@ class CellSegmentationTracker:
             plt.show()
         return
 
-    def __save_grid_as_mat_file(self, name, x_increases_left_to_right = True):
-        """
-        Save grid dataframe as mat file.
-        """
-        grid_columns = ['Frame', 'T', 'Ngrid','x_center', 'y_center', 'cell_number', 'number_density','mean_velocity_X','mean_velocity_Y']
-        grid_columns = self.grid_df.columns.to_list()
-        grid_columns.remove('Ngrid')
-        grid_dict = {}
-
-        data= self.grid_df.loc[:, grid_columns].values
-
-        # Find number of grid squares in each dimension
-        Nx = len(np.unique(data[:, grid_columns.index('x_center')]))
-        Ny = len(np.unique(data[:, grid_columns.index('y_center')]))
-        Nsquares = Nx * Ny
-
-        # Extract grid centers
-        x_center = data[:Nsquares, grid_columns.index('x_center')].reshape(Ny, Nx)
-        # Flip to get increasing y_values
-        y_center = np.flip(data[:Nsquares, grid_columns.index('y_center')].reshape(Ny, Nx), axis = 0)
-
-        if not x_increases_left_to_right:
-            x_center = x_center.T
-            y_center = y_center.T
-
-        # Add frame and time to grid dict
-        for key in ['Frame', 'T']:
-            grid_dict.update({key: self.grid_df[key].unique()})
-
-        # Add grid centers to grid dict
-        Nframes = len(grid_dict['Frame'])
-        X = np.zeros([Nframes, 1], dtype = object)
-        Y = np.zeros([Nframes, 1], dtype = object)
-        for i in np.arange(Nframes):
-            X[i, 0] = x_center
-            Y[i, 0] = y_center
-        grid_dict.update({'x_center': X, 'y_center': Y})
-
-        remaining_cols = grid_columns[grid_columns.index('cell_number'):]
-
-        # Add grid features to grid dict
-        cell_arr = np.zeros([Nframes, len(remaining_cols)], dtype = object)
-        for i in np.arange(Nframes):
-            frame_mask = data[:, grid_columns.index('Frame')] == i
-            for j, key in enumerate(remaining_cols):
-                if x_increases_left_to_right:
-                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0)
-                else:
-                    cell_arr[i, j] = np.flip(data[frame_mask, grid_columns.index(key)].reshape(Ny, Nx), axis = 0).T
-
-        # update grid dict
-        for i, key in enumerate(remaining_cols):
-            grid_dict.update({key: np.expand_dims(cell_arr[:, i], axis = 1)})
-
-        # Save grid dict as mat file
-        filename = self.__generate_filename(name, append = '_grid_statistics.mat')
-        savemat(os.path.join(self.output_folder, filename), grid_dict)
-        print(f"Saved grid statistics as mat file to: {os.path.join(self.output_folder, filename)}")
-        return
     
     #### Public methods ####
 
@@ -950,8 +952,8 @@ class CellSegmentationTracker:
         self.__prepare_images()
 
         # Ensure that xml file has not already been created
-        if os.path.isfile(self.__img_path.strip(".tif") + ".xml"):
-            print("Skipping segmentation and tracking, as xml file already exits at: ", self.__img_path.strip(".tif") + ".xml")
+        if os.path.isfile(os.path.splitext(self.__img_path)[0] + ".xml"):
+            print("Skipping segmentation and tracking, as xml file already exits at: ", os.path.splitext(self.__img_path)[0] + ".xml")
         else:
             # Generate dictionary for jython script
             self.__generate_jython_dict()
@@ -979,11 +981,11 @@ class CellSegmentationTracker:
                         np.array([0.4, 0.0]))
             
         # Set xml path to image path
-        self.xml_path = self.__img_path.strip(".tif") + ".xml"
+        self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
         return
 
     def generate_csv_files(self, calculate_velocities = True, get_tracks = True, \
-                           get_edges = True, save_csv_files = True, name = None):
+                           get_edges = True, get_rois = False, save_csv_files = True, name = None):
         """
         Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
 
@@ -1012,7 +1014,7 @@ class CellSegmentationTracker:
 
         if not str(self.xml_path).endswith(".xml"):
             try:
-                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+                self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
             except:
                 raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \nor the image folder must contain a .xml file with the same name as the image file.")
 
@@ -1020,7 +1022,7 @@ class CellSegmentationTracker:
                 \nProcessing an XML file with 120.000 spots, 90.000 edges and 20.000 tracks takes about 6-7 minutes to process on a regular laptop.\n")
         t1 = time.time()
         self.spots_df, self.tracks_df, self.edges_df = trackmate_xml_to_csv(self.xml_path, calculate_velocities=calculate_velocities,
-                                                        get_track_features = get_tracks, get_edge_features = get_edges)
+                                                        get_track_features = get_tracks, get_edge_features = get_edges, get_rois = get_rois)
         t2 = time.time()
         print(f"Finished generating csv files from xml file in {t2 - t1:.2f} seconds.\n")
 
@@ -1070,7 +1072,7 @@ class CellSegmentationTracker:
         """
         if not str(self.xml_path).endswith(".xml"):
             try:
-                self.xml_path = self.__img_path.strip(".tif") + ".xml"
+                self.xml_path = os.path.splitext(self.__img_path)[0] + ".xml"
             except:
                 raise OSError("No or invalid xml file path provided! It must either be provided as an argument, \
                               or the image folder must contain a .xml file with the same name as the image file.")
@@ -1108,7 +1110,13 @@ class CellSegmentationTracker:
         print("All times are in physical units, if provided. Otherwise, they are in frames.\n")
 
         self.__initialize_basic_attributes()
-        print("Average no. of spots per frame: ", self.__Nspots / self.__Nframes)
+        # Find number of spots in each frame
+        Nspots_per_frame = self.spots_df.groupby('Frame')['T'].count().values
+
+        print("No. of spots in each frame: ", Nspots_per_frame)
+
+        print("\nAverage no. of spots per frame: ", np.round(np.mean(Nspots_per_frame),3), " \u00B1", \
+              np.round(np.std(Nspots_per_frame, ddof = 1) / np.sqrt(self.__Nframes),3))
      
         # Calculate average values of spot observables
         for i, col in enumerate(self.spots_df.columns.drop(spots_exclude_list)):
@@ -1125,8 +1133,9 @@ class CellSegmentationTracker:
             print("\nSUMMARY STATISTICS FOR TRACKS: ")
             print("All lengths are in phyiscal units, if provided. Otherwise, they are in pixels.")
             print("All times are in physical units, if provided. Otherwise, they are in frames.\n")
+
             print("Total no. of tracks: ", self.__Ntracks)
-            print("Average no. of tracks per frame: ", self.__Ntracks / self.__Nframes)
+
             # Calculate average values of track observables
             for i, col in enumerate(self.tracks_df.columns.drop(tracks_exclude_list)):
                 avg, std = np.mean(self.tracks_df[col]), np.std(self.tracks_df[col], ddof = 1)
