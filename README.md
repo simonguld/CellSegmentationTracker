@@ -311,6 +311,8 @@ Generate spot, track and edge dataframes from xml file, with the option of savin
     - whether to generate a dataframe with track features
 - **get_edges : (bool, default = True)**
     - whether to generate a dataframe with edge features
+- **get_rois : (bool, default = False)**
+    - whether to add a column to the spots dataframe with the ROI coordinates of each spot. THE ROIs outline the spot mask. Adding them increases the size of the dataframe considerably. The ROI feature is a list with the format [(x1,y1), (x2,y2), ...].
 - **save_csv_files : (bool, default = True)**
     - whether to save the csv files to the output folder
 - **name : (str, default = None)**
