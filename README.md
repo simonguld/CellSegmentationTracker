@@ -298,7 +298,7 @@ Run cellpose segmentation and trackmate tracking.
 
 ```python
 generate_csv_files(calculate_velocities = True, get_tracks = True, 
-                           get_edges = True, save_csv_files = True, name = None)
+                           get_edges = True, get_rois = False, save_csv_files = True, name = None)
 ```
 Generate spot, track and edge dataframes from xml file, with the option of saving them to csv files.
 
