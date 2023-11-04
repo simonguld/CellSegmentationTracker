@@ -69,7 +69,6 @@ np.set_printoptions(precision = 10, suppress=1e-14)
 # make roubst under other image formats?
 # make robust under color, multichannel etc?
 
-
 class CellSegmentationTracker:
 
     """
@@ -113,7 +112,7 @@ class CellSegmentationTracker:
     custom_model_path: (str, default=None) - If a custom Cellpose model is to be used, provide the path to the model here.
 
     show_segmentation (bool, default=True) - Determines whether to open Fiji and display the segmentation results  \
-      interactively during processing. If True, Fiji must be closed before the script can continue.
+      interactively during processing. If True, Fiji must be closed before the script can continue. The overlays will be saved as .avi file in the image folder
 
     cellpose_dict:  (dict, default=dict()) - A dictionary containing additional parameters to pass to the Cellpose 
                     segmentation algorithm:
@@ -999,6 +998,9 @@ class CellSegmentationTracker:
 
         get_edges : (bool, default = True) - whether to generate a dataframe with edge features
 
+        get_rois : (bool, default = False) - whether to add a column to the spots dataframe with the ROI coordinates of each spot. \
+            The ROIs outline the cell mask. Adding them takes up a lot of memory. The ROI feature is a list with the format [(x1,y1), (x2,y2), ...].
+
         save_csv_files : (bool, default = True) - whether to save the csv files to the output folder
 
         name : (str, default = None) - name of csv files. If None, the name of the image file is used.
@@ -1103,7 +1105,7 @@ class CellSegmentationTracker:
         """
 
         spots_exclude_list = ['Frame', 'Z', 'Manual spot color', 'Ellipse center x0', 'Ellipse center y0',\
-                              'Shape index', 'Spot ID', 'TRACK_ID']
+                              'Shape index', 'Spot ID', 'TRACK_ID', 'ROI']
    
         print("\nSUMMARY STATISTICS FOR SPOTS: ")
         print("All lengths are in phyiscal units, if provided. Otherwise, they are in pixels.")
@@ -1763,7 +1765,7 @@ class CellSegmentationTracker:
         return msd_df
 
     def calc_density_fluctuations_for_frame(self, points_arr, window_sizes, N_center_points = None, Ndof = 1, \
-                                            x_boundaries = None, y_boundaries = None, normalize = False):
+                                        x_boundaries = None, y_boundaries = None, normalize = False):
         """
         This function is a modification of a number of functions written by Patrizio Cugia di Sant'Orsola, who has kindly
         lend me his code.
@@ -1793,7 +1795,7 @@ class CellSegmentationTracker:
         --------
         var_counts : (numpy array) - Array containing the number variance for each window size
         var_densities : (numpy array) - Array containing the density variance for each window size
-    
+
         """
 
         # If N is not given, use all points
