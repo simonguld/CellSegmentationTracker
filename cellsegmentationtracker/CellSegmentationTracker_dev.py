@@ -29,6 +29,11 @@ from sklearn.neighbors import KDTree
 from scipy.interpolate import griddata
 from scipy.io import savemat
 
+from cellpose import utils, io
+from cellpose import models
+from cellpose.io import imread
+from cellpose import plot
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 from matplotlib import rcParams
@@ -1992,6 +1997,140 @@ class CellSegmentationTracker:
         self.density_fluctuations_df = fluc_df
         return fluc_df
   
+    def do_sample_segmentation(self, image_indices_to_segment = [0], flow_threshold = None, \
+                                          cellprob_threshold = None, diameter = None, model_to_use = None, 
+                                        cellpose_model_to_estimate_diameter = 'CYTO2', plot_overlays = True, save_overlays = False):
+        
+        ##JYTHON DICT DUTTER IKKE!
+
+        # lav en init-cellpose-dict function og brug den evt også i run_segmentation
+
+        self.__generate_jython_dict()
+
+        if model_to_use is None:
+            model_to_use = self.cellpose_dict['CELLPOSE_MODEL'].lower()
+
+        flow_threshold = self.cellpose_dict['FLOW_THRESHOLD'] if flow_threshold is None else flow_threshold
+        cellprob_threshold = self.cellpose_dict['CELLPROB_THRESHOLD'] if cellprob_threshold is None else cellprob_threshold
+
+        try:
+            channels = [self.cellpose_dict['TARGET_CHANNEL'], self.cellpose_dict['OPTIONAL_CHANNEL_2']]
+        except:
+            channels = [0,0]
+
+        if diameter is None:
+            if cellpose_model_to_estimate_diameter.lower() not in ['cyto', 'cyto2', 'nuclei']:
+                print("Invalid cellpose model to estimate diameter. Must be 'CYTO', 'CYTO2' or 'NUCLEI'.")
+                return
+            else:
+                cellpose_model_to_estimate_diameter = cellpose_model_to_estimate_diameter.lower()
+
+
+            # Set diameter
+            size_model_path = models.size_model_path(model_type=cellpose_model_to_estimate_diameter)
+         #   size_model = models.SizeModel(cp_model=model, pretrained_size=size_model_path)
+
+
+
+    def find_best_segmentation_parameters(self, image_indices_to_segment = [0], Nsegmentations = 5,  flow_threshold_bounds = [0, 10], \
+                                          cellprob_threshold_bounds = [-6, 6], diameter = None, model_to_use = 'CYTO2', custom_model_path = None, flows_thresholds_to_use = [], \
+                                            cellprob_thresholds_to_use = [], cellpose_model_to_estimate_diameter = 'CYTO2', save_overlays = True, plot_overlays = True):
+        
+
+
+        Nflows = len(flows_thresholds_to_use)
+        Ncellprobs = len(cellprob_thresholds_to_use)
+        Nsegmentations = Nsegmentations if Nflows == 0 and Ncellprobs == 0 else Nflows * Ncellprobs
+
+        try:
+            channels = [self.cellpose_dict['TARGET_CHANNEL'], self.cellpose_dict['OPTIONAL_CHANNEL_2']]
+        except:
+            channels = [0,0]
+
+        if diameter is None:
+            if cellpose_model_to_estimate_diameter.lower() not in ['cyto', 'cyto2', 'nuclei']:
+                print("Invalid cellpose model to estimate diameter. Must be 'CYTO', 'CYTO2' or 'NUCLEI'.")
+                return
+            else:
+                cellpose_model_to_estimate_diameter = cellpose_model_to_estimate_diameter.lower()
+
+            # Set diameter
+            size_model_path = models.size_model_path(model_type=cellpose_model_to_estimate_diameter)
+         #   size_model = models.SizeModel(cp_model=model, pretrained_size=size_model_path)
+
+
+
+def show_segmentation_mod(fig, img, maski, nsegmentation = 0, channels=[0,0], file_name=None):
+    """ plot segmentation results 
+
+    Can save each panel of figure with file_name option. Use channels option if
+    img input is not an RGB image with 3 channels.
+
+    Parameters
+    -------------
+
+    fig: matplotlib.pyplot.figure
+        figure in which to make plot
+
+    img: 2D or 3D array
+        image input into cellpose
+
+    maski: int, 2D array
+        for image k, masks[k] output from Cellpose.eval, where 0=NO masks; 1,2,...=mask labels
+
+    flowi: int, 2D array 
+        for image k, flows[k][0] output from Cellpose.eval (RGB of flows)
+
+    channels: list of int (optional, default [0,0])
+        channels used to run Cellpose, no need to use if image is RGB
+
+    file_name: str (optional, default None)
+        file name of image, if file_name is not None, figure panels are saved
+        
+    seg_norm: bool (optional, default False)
+        improve cell visibility under labels
+        
+
+    """
+
+    nrow = nsegmentation + 1
+    ax = fig.add_subplot(nrow,4,1)
+    img0 = img.copy()
+
+    if img0.shape[0] < 4:
+        img0 = np.transpose(img0, (1,2,0))
+    if img0.shape[-1] < 3 or img0.ndim < 3:
+        img0 = plot.image_to_rgb(img0, channels=channels)
+    else:
+        if img0.max()<=50.0:
+            img0 = np.uint8(np.clip(img0*255, 0, 1))
+    ax.imshow(img0)
+    ax.set_title('original image')
+    ax.axis('off')
+
+    outlines = utils.masks_to_outlines(maski)
+
+    overlay = plot.mask_overlay(img0, maski)
+
+    ax = fig.add_subplot(nrow,4,2)
+    outX, outY = np.nonzero(outlines)
+    imgout= img0.copy()
+    imgout[outX, outY] = np.array([255,0,0]) # pure red
+
+    ax.imshow(imgout)
+    ax.set_title('predicted outlines')
+    ax.axis('off')
+
+    ax = fig.add_subplot(nrow,4,3)
+    ax.imshow(overlay)
+    ax.set_title('predicted masks')
+    ax.axis('off')
+
+    if file_name is not None:
+        save_path = os.path.splitext(file_name)[0]
+        io.imsave(save_path + '_overlay.jpg', overlay)
+        io.imsave(save_path + '_outlines.jpg', imgout)
+    return
 
 
 ##  NOGET MED: 
