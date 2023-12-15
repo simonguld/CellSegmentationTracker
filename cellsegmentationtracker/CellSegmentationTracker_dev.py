@@ -29,15 +29,15 @@ from sklearn.neighbors import KDTree
 from scipy.interpolate import griddata
 from scipy.io import savemat
 
-from cellpose import utils, io
-from cellpose import models
-from cellpose.io import imread
-from cellpose import plot
-
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 from matplotlib import rcParams
 from cycler import cycler
+
+from cellpose.models import CellposeModel, SizeModel, size_model_path
+from cellpose.utils import masks_to_outlines
+from cellpose.io import imread
+from cellpose.plot import mask_overlay, image_to_rgb
 
 from utils import trackmate_xml_to_csv, merge_tiff, get_imlist, prepend_text_to_file, search_and_modify_file
 
@@ -426,6 +426,56 @@ class CellSegmentationTracker:
         print("Cellpose source code files have been modified to allow for modification of flow and cell probability threshold.")
         return
 
+    def __initialize_param_dicts(self):
+        """
+        Initialize parameter dictionaries.
+        """
+
+        # Extract or set flow and cell probability threshold
+        try:
+            self.__flow_threshold = self.cellpose_dict['FLOW_THRESHOLD']
+        except:
+            if self.__use_model == 'EPI2500':
+                self.__flow_threshold = 0.6
+            elif self.__use_model == 'EPI6000':
+                self.__flow_threshold = 0.5
+            else:
+                self.__flow_threshold = 0.4
+            self.cellpose_dict['FLOW_THRESHOLD'] = self.__flow_threshold
+        try:
+            self.__cellprob_threshold = self.cellpose_dict['CELLPROB_THRESHOLD']
+        except:
+            if self.__use_model == 'EPI2500':
+                self.__cellprob_threshold = -1
+            elif self.__use_model == 'EPI500':
+                self.__cellprob_threshold = 0.5
+            else:
+                self.__cellprob_threshold = 0.0
+            self.cellpose_dict['CELLPROB_THRESHOLD'] = self.__cellprob_threshold
+            
+        # Set missing parameters to default values
+        for key in self.cellpose_default_values.keys():
+            if key not in self.cellpose_dict.keys():
+                self.cellpose_dict[key] = self.cellpose_default_values[key]
+
+        if self.trackmate_dict == dict():
+            self.trackmate_dict = self.trackmate_default_values
+        else:
+            for key in self.trackmate_default_values.keys():
+                if key not in self.trackmate_dict.keys():
+                    self.trackmate_dict[key] = self.trackmate_default_values[key]
+
+        # Set model path
+        if os.path.isfile(f'{self.__custom_model_path}'):
+            self.__use_model = 'CUSTOM'
+        else:
+            if self.__use_model in self.pretrained_models:
+                idx = self.pretrained_models.index(self.__use_model)
+                self.__custom_model_path = self.__pretrained_models_paths[idx]
+            else:
+                raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)  
+        return
+
     def __generate_jython_dict(self):
         """
         Generate the dictionary holding the parameters needed to run the jython script.
@@ -435,24 +485,10 @@ class CellSegmentationTracker:
                                     "CELLPOSE_PYTHON_FILEPATH": self.__cellpose_python_filepath,
                                     "OUTPUT_PATH": self.output_folder, "SHOW_SEGMENTATION": self.__show_segmentation})
 
-        # Specify Cellpose and TrackMate parameters not set by user
-        if self.cellpose_dict == {}:
-            self.cellpose_dict = self.cellpose_default_values
-            del self.cellpose_dict['FLOW_THRESHOLD']
-            del self.cellpose_dict['CELLPROB_THRESHOLD']
-        else:
-            for key in set(self.cellpose_default_values) - set(['FLOW_THRESHOLD', 'CELLPROB_THRESHOLD']):
-                if key not in self.cellpose_dict.keys():
-                    self.cellpose_dict[key] = self.cellpose_default_values[key]
-        if self.trackmate_dict == {}:
-            self.trackmate_dict = self.trackmate_default_values
-        else:
-            for key in self.trackmate_default_values.keys():
-                if key not in self.trackmate_dict.keys():
-                    self.trackmate_dict[key] = self.trackmate_default_values[key]
         self.cellpose_dict['CELLPOSE_MODEL_FILEPATH'] = self.__custom_model_path
 
-        self.__jython_dict.update({'CELLPOSE_DICT': self.cellpose_dict})
+        cp_dict_restricted = {key: self.cellpose_dict[key] for key in self.cellpose_dict.keys() if key not in ['FLOW_THRESHOLD', 'CELLPROB_THRESHOLD']}
+        self.__jython_dict.update({'CELLPOSE_DICT': cp_dict_restricted})
         self.__jython_dict.update({'TRACKMATE_DICT': self.trackmate_dict}) 
 
         # Warn user about track merging and splitting
@@ -919,38 +955,8 @@ class CellSegmentationTracker:
         if not os.path.isdir(f'{self.img_folder}') and not os.path.isfile(f'{self.img_folder}'):
             raise OSError("Invalid image folder path!")
         
-        ## Set relevant attribute values
-        # Extract or set flow and cell probability threshold
-        try:
-            self.__flow_threshold = self.cellpose_dict['FLOW_THRESHOLD']
-            del self.cellpose_dict['FLOW_THRESHOLD']
-        except:
-            if self.__use_model == 'EPI2500':
-                self.__flow_threshold = 0.6
-            elif self.__use_model == 'EPI6000':
-                self.__flow_threshold = 0.5
-            else:
-                self.__flow_threshold = 0.4
-        try:
-            self.__cellprob_threshold = self.cellpose_dict['CELLPROB_THRESHOLD']
-            del self.cellpose_dict['CELLPROB_THRESHOLD']
-        except:
-            if self.__use_model == 'EPI2500':
-                self.__cellprob_threshold = -1
-            elif self.__use_model == 'EPI500':
-                self.__cellprob_threshold = 0.5
-            else:
-                self.__cellprob_threshold = 0.0
-
-        # Set model path
-        if os.path.isfile(f'{self.__custom_model_path}'):
-            self.__use_model = 'CUSTOM'
-        else:
-            if self.__use_model in self.pretrained_models:
-                idx = self.pretrained_models.index(self.__use_model)
-                self.__custom_model_path = self.__pretrained_models_paths[idx]
-            else:
-                raise ValueError("No custom model path provided, and use_model not in pretrained models: ", self.pretrained_models)
+        # Initialize parameter dictionaries
+        self.__initialize_param_dicts()
 
         # Prepare images
         self.__prepare_images()
@@ -1997,39 +2003,99 @@ class CellSegmentationTracker:
         self.density_fluctuations_df = fluc_df
         return fluc_df
   
-    def do_sample_segmentation(self, image_indices_to_segment = [0], flow_threshold = None, \
-                                          cellprob_threshold = None, diameter = None, model_to_use = None, 
-                                        cellpose_model_to_estimate_diameter = 'CYTO2', plot_overlays = True, save_overlays = False):
+    def do_sample_segmentation(self, image_indices_to_segment = [0], cellpose_model_to_estimate_diameter = 'CYTO2', \
+                               plot_overlays = True, plot_as_you_go = True, save_overlays = False):
         
-        ##JYTHON DICT DUTTER IKKE!
+        # move segment func to utils.
+        # check unit conversion.
 
-        # lav en init-cellpose-dict function og brug den evt også i run_segmentation
 
-        self.__generate_jython_dict()
 
-        if model_to_use is None:
-            model_to_use = self.cellpose_dict['CELLPOSE_MODEL'].lower()
+        # Prepare images
+        self.__prepare_images()
 
-        flow_threshold = self.cellpose_dict['FLOW_THRESHOLD'] if flow_threshold is None else flow_threshold
-        cellprob_threshold = self.cellpose_dict['CELLPROB_THRESHOLD'] if cellprob_threshold is None else cellprob_threshold
+        # Initialize parameters
+        self.__initialize_param_dicts()
+        cp_model_kwargs = dict(gpu=self.cellpose_dict['USE_GPU'], net_avg=False, device=None, \
+                               residual_on=True, style_on=True, concatenation=False, nchan=2)
 
-        try:
-            channels = [self.cellpose_dict['TARGET_CHANNEL'], self.cellpose_dict['OPTIONAL_CHANNEL_2']]
-        except:
-            channels = [0,0]
+        channels = [self.cellpose_dict['TARGET_CHANNEL'], self.cellpose_dict['OPTIONAL_CHANNEL_2']]
+        est_diameter = True if self.cellpose_dict['CELL_DIAMETER'] == 0 else False
 
-        if diameter is None:
+        if est_diameter:
+            info_string = 'Estimated by cellpose using model: ' + cellpose_model_to_estimate_diameter
             if cellpose_model_to_estimate_diameter.lower() not in ['cyto', 'cyto2', 'nuclei']:
                 print("Invalid cellpose model to estimate diameter. Must be 'CYTO', 'CYTO2' or 'NUCLEI'.")
                 return
-            else:
-                cellpose_model_to_estimate_diameter = cellpose_model_to_estimate_diameter.lower()
+        else:
+            cp_model_kwargs['diam_mean'] = self.cellpose_dict['CELL_DIAMETER']
+            info_string = 'User defined'
 
+        cp_model_kwargs['model_type'] = cellpose_model_to_estimate_diameter.lower()
+        pretrained_model_path = self.__custom_model_path if self.__use_model not in ['CYTO', 'CYTO2' 'NUCLEI'] else None
 
-            # Set diameter
-            size_model_path = models.size_model_path(model_type=cellpose_model_to_estimate_diameter)
-         #   size_model = models.SizeModel(cp_model=model, pretrained_size=size_model_path)
+        # Initialize model
+        model = CellposeModel(pretrained_model=pretrained_model_path,\
+                                **cp_model_kwargs)
+        
+        # Extract images
+        img_list = [img for img in imread(self.__img_path)]
+        img_list = [img_list[i] for i in image_indices_to_segment]
+        Nimg = len(img_list)
 
+        if Nimg < len(image_indices_to_segment):
+            print("Invalid indices provided! Continuing using only valid indices...")
+
+        # Estimate diameter
+        if est_diameter:
+            size_model = size_model_path(model_type=cellpose_model_to_estimate_diameter)
+            size_model = SizeModel(cp_model=model, pretrained_size=size_model)
+            diam_arr, _ = size_model.eval(img_list, channels=channels)
+            diam_arr = np.array([diam_arr]) if isinstance(diam_arr, float) else diam_arr
+     
+        # Run segmentation
+        for i, im in enumerate(img_list):
+
+            diam = diam_arr[i] if est_diameter else self.cellpose_dict['CELL_DIAMETER']
+            flow_threshold = self.__flow_threshold
+            cellprob_threshold = self.__cellprob_threshold
+
+            print("STARTING SEGMENTATION OF IMAGE ", image_indices_to_segment[i])
+            print("MODEL: ", self.__use_model)
+            print("PARAMETERS: ",)
+
+            print(f"diameter ({info_string}) = ", diam)
+            print("flow_threshold = ", flow_threshold)
+            print("cellprob_threshold = ", cellprob_threshold)
+            print("===============================================")
+
+            t1 = time.time()
+            masks, flows, styles = model.eval(im, diameter=diam, cellprob_threshold = cellprob_threshold, \
+                                              flow_threshold = flow_threshold, channels=channels)
+            t2 = time.time()
+            
+            print("SEGMENTATION COMPLETETD IN : ", np.round(t2-t1,1), " SECONDS")
+            
+
+            fig, ax = plt.subplots(1,3, figsize=(15,5))
+            ax = ax.flatten()
+
+            show_segmentation(ax, im, masks, channels=channels)
+            plt.tight_layout()
+            plt.suptitle(f"Segmentation of image {image_indices_to_segment[i]}", fontsize=16,y=1.05)
+
+            if plot_as_you_go:
+                plt.show()
+
+            if save_overlays:
+                save_path = os.path.splitext(self.__img_path)[0] + f'_seg_img{i}_diam{np.round(diam,3)}_flow{flow_threshold}_cellprob{cellprob_threshold}.png'
+                plt.savefig(save_path, dpi=420, bbox_inches='tight')
+                print("Segmentation overlay saved at: ", save_path)
+            print("===============================================")
+ 
+        if plot_overlays:
+            plt.show()
+        return
 
 
     def find_best_segmentation_parameters(self, image_indices_to_segment = [0], Nsegmentations = 5,  flow_threshold_bounds = [0, 10], \
@@ -2055,13 +2121,14 @@ class CellSegmentationTracker:
                 cellpose_model_to_estimate_diameter = cellpose_model_to_estimate_diameter.lower()
 
             # Set diameter
-            size_model_path = models.size_model_path(model_type=cellpose_model_to_estimate_diameter)
+            size_model_path = size_model_path(model_type=cellpose_model_to_estimate_diameter)
          #   size_model = models.SizeModel(cp_model=model, pretrained_size=size_model_path)
 
 
 
-def show_segmentation_mod(fig, img, maski, nsegmentation = 0, channels=[0,0], file_name=None):
-    """ plot segmentation results 
+def show_segmentation(ax, img, maski, channels=[0,0]):
+    
+    """ plot segmentation results. This function is a slightly modified version of the show_segmentation function in the cellpose package.
 
     Can save each panel of figure with file_name option. Use channels option if
     img input is not an RGB image with 3 channels.
@@ -2069,17 +2136,14 @@ def show_segmentation_mod(fig, img, maski, nsegmentation = 0, channels=[0,0], fi
     Parameters
     -------------
 
-    fig: matplotlib.pyplot.figure
-        figure in which to make plot
+    ax: matplotlib.pyplot.ax
+        ax in which to make plot
 
     img: 2D or 3D array
         image input into cellpose
 
     maski: int, 2D array
         for image k, masks[k] output from Cellpose.eval, where 0=NO masks; 1,2,...=mask labels
-
-    flowi: int, 2D array 
-        for image k, flows[k][0] output from Cellpose.eval (RGB of flows)
 
     channels: list of int (optional, default [0,0])
         channels used to run Cellpose, no need to use if image is RGB
@@ -2092,44 +2156,35 @@ def show_segmentation_mod(fig, img, maski, nsegmentation = 0, channels=[0,0], fi
         
 
     """
-
-    nrow = nsegmentation + 1
-    ax = fig.add_subplot(nrow,4,1)
+    
     img0 = img.copy()
 
     if img0.shape[0] < 4:
         img0 = np.transpose(img0, (1,2,0))
     if img0.shape[-1] < 3 or img0.ndim < 3:
-        img0 = plot.image_to_rgb(img0, channels=channels)
+        img0 = image_to_rgb(img0, channels=channels)
     else:
         if img0.max()<=50.0:
             img0 = np.uint8(np.clip(img0*255, 0, 1))
-    ax.imshow(img0)
-    ax.set_title('original image')
-    ax.axis('off')
+    ax[0].imshow(img0)
+    ax[0].set_title('original image')
+    ax[0].axis('off')
 
-    outlines = utils.masks_to_outlines(maski)
+    outlines = masks_to_outlines(maski)
+    overlay = mask_overlay(img0, maski)
 
-    overlay = plot.mask_overlay(img0, maski)
 
-    ax = fig.add_subplot(nrow,4,2)
     outX, outY = np.nonzero(outlines)
     imgout= img0.copy()
     imgout[outX, outY] = np.array([255,0,0]) # pure red
 
-    ax.imshow(imgout)
-    ax.set_title('predicted outlines')
-    ax.axis('off')
+    ax[1].imshow(imgout)
+    ax[1].set_title('predicted outlines')
+    ax[1].axis('off')
 
-    ax = fig.add_subplot(nrow,4,3)
-    ax.imshow(overlay)
-    ax.set_title('predicted masks')
-    ax.axis('off')
-
-    if file_name is not None:
-        save_path = os.path.splitext(file_name)[0]
-        io.imsave(save_path + '_overlay.jpg', overlay)
-        io.imsave(save_path + '_outlines.jpg', imgout)
+    ax[2].imshow(overlay)
+    ax[2].set_title('predicted masks')
+    ax[2].axis('off')
     return
 
 
