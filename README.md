@@ -193,14 +193,6 @@ class CellSegmentationTracker.CellSegmentationTracker(cellpose_folder_path = Non
           trackmate_dict = {}, unit_conversion_dict = {})
 ```
 
-
-```python
- __init__(cellpose_folder_path = None, imagej_filepath = None, cellpose_python_filepath = None,
-          image_folder_path = None, xml_path = None, output_folder_path = None, use_model = 'CYTO',
-          custom_model_path = None, show_segmentation = False, cellpose_dict = {}, trackmate_dict = {},
-unit_conversion_dict = {})
-```
-
 #### **Parameters:**    
 - **cellpose_folder_path: (str, default=None)**
   - The path to the folder containing the cellpose python package. If you want to use CellSegmentationTracker for segmentation and tracking, this parameter must be provided. It can be found in the virtual environment created for running cellpose. On windows, it typically found in ./path_to_anaconda_folder/envs/cellpose/Lib/site-packages/cellpose.
