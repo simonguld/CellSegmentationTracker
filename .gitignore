@@ -2,7 +2,8 @@ __pycache__/
 .jython_cache/
 .pytest_cache/
 
-.xml
-.json
-.avi
+*.xml
+*.avi
 
+cellsegmentationtracker/*.txt
+cellsegmentationtracker/*.json
