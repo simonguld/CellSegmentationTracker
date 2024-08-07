@@ -1,5 +1,5 @@
 # Author: Simon Guldager Andersen
-# Date (latest update): 2023-08-29
+# Date (latest update): 2024-08-07
 
 # This script contains all the helper functions needed in CellSegmentationTracker.py
 
@@ -401,56 +401,3 @@ def print_all_possible_spot_features():
     print(object_labels.values())
     return
 
-
-def main():
-
-    extract_rois = True
-    
-    xml_path = "C:\\Users\\Simon Andersen\\Projects\\Projects\\CellSegmentationTracker\\resources\\epi2500.xml"
-    root = et.fromstring(open(xml_path).read())
-
-    spot_features = root.find('Model').find('FeatureDeclarations').find('SpotFeatures')
-    spot_features = [c.get('feature') for c in list(spot_features)] + ['ID']
- 
-
-    spots_object=[]
-    spots = root.find('Model').find('AllSpots')
-    import  numpy as np
-    spot_objects = []
-    for frame in spots.findall('SpotsInFrame'):
-
-        if extract_rois:
-            for spot in frame.findall('.//Spot'):
-                single_object = []
-                for label in spot_features:
-                    single_object.append(spot.get(label))
-                coordinates = spot.text.split()
-                coordinates = [(float(coordinates[i]), float(coordinates[i+1])) for i in range(0, len(coordinates), 2)]
-                print(len(single_object))
-                single_object.append(coordinates)
-                print(len(single_object))
-                spot_objects.append(single_object)
-                break
-        else:
-            for spot in frame.findall('Spot'):
-                single_object = []
-                for label in spot_features:
-                    single_object.append(spot.get(label))
-                spot_objects.append(single_object)
-
-
-    print(len(spot_objects[0]))
-    if extract_rois:
-        spot_features = spot_features + ['ROI']
-             
-    df_spots = pd.DataFrame(spot_objects, columns=spot_features)
-    float_columns = df_spots.columns.difference(['ROI'])
-    df_spots[float_columns] = df_spots[float_columns].astype(float)
- 
-    print(df_spots.info())
-    print(df_spots)
-
-
-if __name__ == "__main__":
-    main()   
-    

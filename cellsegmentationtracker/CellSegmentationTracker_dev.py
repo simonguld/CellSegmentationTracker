@@ -1,6 +1,5 @@
 ## Author: Simon Guldager Andersen
-## Date (latest update): 2023-09-26
-
+## Date (latest update): 2024-08-07
 
 ### -----------------------------------------------------------------
 

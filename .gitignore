@@ -1,6 +1,10 @@
 __pycache__/
 .jython_cache/
 .pytest_cache/
+build/
+*.egg-info/
+.eggs/
+*.egg
 
 *.xml
 *.avi

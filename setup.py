@@ -1,15 +1,14 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 
 setup(
     name='cellsegmentationtracker',
-    version="0.1.10",
+    version="0.1.11",
     author='Simon Guldager Andersen',
     author_email='guldager.simon@gmail.com',
     url='https://github.com/simonguld/CellSegmentationTracker',
     description='Module for cell segmentation, tracking and subsequent (biophysical) statistical analysis',
-    install_requires=["tifftools", "seaborn", "scipy", "scikit-image", 'scikit-learn'],
-    packages=find_packages(include=['cellsegmentationtracker', 'cellsegmentationtracker.*']),
-
+    install_requires=["tifftools", "seaborn", "scipy", "scikit-image", 'scikit-learn'],  
+    packages=find_namespace_packages(include=['cellsegmentationtracker'], exclude=['cellsegmentationtracker.__pycache__.*']), #, 'cellsegmentationtracker.*']),
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Natural Language :: English',
@@ -20,4 +19,5 @@ setup(
     ],
     include_package_data=True,
     package_data={'': ['models/*']}
+
 )

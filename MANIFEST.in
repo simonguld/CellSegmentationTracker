@@ -1,0 +1,5 @@
+exclude cellsegmentationtracker/*
+
+include cellsegmentationtracker/models/*
+include cellsegmentationtracker/*.py
+exclude cellsegmentationtracker/*_dev.py
