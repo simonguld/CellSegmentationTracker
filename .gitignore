@@ -2,6 +2,8 @@ __pycache__/
 .jython_cache/
 .pytest_cache/
 build/
+dist/
+
 *.egg-info/
 .eggs/
 *.egg
@@ -11,3 +13,4 @@ build/
 
 cellsegmentationtracker/*.txt
 cellsegmentationtracker/*.json
+cellsegmentationtracker/*_dev.py
