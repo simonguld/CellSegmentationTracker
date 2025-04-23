@@ -51,6 +51,7 @@ def main():
                       'target_width, target_height = 698, 648']
     replace_strings = ['target_height = target_height', 'target_width = target_width', 'target_height=target_height', 'target_width=target_width', \
                        'target_height, target_width = target_height, target_width' ]
+    
     # STEP 0: gen file to hold target values
     np.savetxt(txt_path, np.array([410, 311]), fmt='%i')
 

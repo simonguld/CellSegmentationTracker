@@ -67,7 +67,7 @@ show_output = param_dict['SHOW_SEGMENTATION']
 # ------------------------------------------------------
 
 # Open image.
-imp  = IJ.openImage( image_path)
+imp  = IJ.openImage(image_path)
 dims = imp.getDimensions()
 
 # Make sure dimensions are correct (Format must be: [x,y,c,z,t])
